@@ -1,24 +1,12 @@
 import axios from 'axios';
+import { API_BASE_URL, DEMO_MODE } from '../config/api.config';
 
-// Use environment variable for API URL, fallback to production URL
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://calling-api.0804.in';
-
-// Demo mode - ALWAYS use mock data by default to prevent timeout errors
-// Set VITE_DEMO_MODE='false' in .env to use real API
-// Default to true (demo mode) unless explicitly set to 'false'
-const DEMO_MODE = import.meta.env.VITE_DEMO_MODE === undefined || import.meta.env.VITE_DEMO_MODE !== 'false';
-
-// Log demo mode status on first load
-if (typeof window !== 'undefined' && !window.__DEMO_MODE_LOGGED__) {
-  window.__DEMO_MODE_LOGGED__ = true;
-  console.log('🔧 DEMO_MODE value:', DEMO_MODE);
-  console.log('🔧 VITE_DEMO_MODE env:', import.meta.env.VITE_DEMO_MODE);
-  console.log('🔧 API Mode:', DEMO_MODE ? 'DEMO (Mock Data)' : 'PRODUCTION (Real API)');
-  if (DEMO_MODE) {
-    console.log('✅ Using mock data - No backend connection needed');
-  } else {
-    console.warn('⚠️ Using real API - Backend connection required');
-  }
+// Log API configuration on first load
+if (typeof window !== 'undefined' && !window.__API_CONFIG_LOGGED__) {
+  window.__API_CONFIG_LOGGED__ = true;
+  console.log('🔧 API Configuration:');
+  console.log(`   Base URL: ${API_BASE_URL}`);
+  console.log(`   Demo Mode: ${DEMO_MODE ? 'ON (Mock Data)' : 'OFF (Real API)'}`);
 }
 
 const api = axios.create({
@@ -69,53 +57,52 @@ api.interceptors.response.use(
   }
 );
 
-// Authentication APIs
+// Authentication APIs - Wired to chatbot-backend
 export const authAPI = {
-  // Login
+  // Login - POST /api/user/login
+  // Backend expects: { email, password }
+  // Backend returns: { success: true, data: { token, role, user: { id, name, email } }, message }
   login: async (email, password) => {
-    const response = await api.post('/api/v1/auth/login', {
+    const response = await api.post('/api/user/login', {
       email,
       password,
     });
     return response.data;
   },
 
-  // Signup
-  signup: async (email, password, name) => {
-    const response = await api.post('/api/v1/auth/signup', {
-      email,
-      password,
-      name,
-    });
-    return response.data;
-  },
-
-  // Logout
+  // Logout - POST /api/auth/logout
   logout: async () => {
-    const response = await api.post('/api/v1/auth/logout');
+    try {
+      const response = await api.post('/api/auth/logout');
+      return response.data;
+    } catch (error) {
+      // Even if logout fails on server, clear local storage
+      console.warn('Logout API call failed, clearing local storage anyway');
+      return { success: true };
+    }
+  },
+
+  // Validate token - POST /api/auth/validate-token
+  validateToken: async () => {
+    const response = await api.post('/api/auth/validate-token');
     return response.data;
   },
 
-  // Get current user
+  // Get current user company info - GET /api/user/company
   getCurrentUser: async () => {
-    const response = await api.get('/api/v1/auth/me');
+    const response = await api.get('/api/user/company');
     return response.data;
   },
 
-  // Refresh token
-  refreshToken: async (refreshToken) => {
-    const response = await api.post('/api/v1/auth/refresh', {
-      refreshToken,
-    });
+  // Get user plan info - GET /api/user/plan
+  getUserPlan: async () => {
+    const response = await api.get('/api/user/plan');
     return response.data;
   },
 
-  // Change password
-  changePassword: async (currentPassword, newPassword) => {
-    const response = await api.post('/api/v1/auth/change-password', {
-      currentPassword,
-      newPassword,
-    });
+  // Get user usage stats - GET /api/user/usage
+  getUserUsage: async () => {
+    const response = await api.get('/api/user/usage');
     return response.data;
   },
 };

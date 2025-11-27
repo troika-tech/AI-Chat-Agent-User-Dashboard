@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FaEye, FaEyeSlash } from 'react-icons/fa';
+import { toast } from 'react-toastify';
 import { authAPI } from '../services/api';
 
 const Login = () => {
@@ -21,71 +22,50 @@ const Login = () => {
     // Validation
     if (!formData.email || !formData.password) {
       setError('Please enter both email and password');
-      setLoading(false);
-      return;
-    }
-
-    // Password length validation
-    if (formData.password.length < 16) {
-      setError('Password must be at least 16 characters long');
+      toast.error('Please enter both email and password');
       setLoading(false);
       return;
     }
 
     try {
-      // Call the backend login API
+      // Call the chatbot backend login API
+      // Backend: POST /api/user/login
+      // Returns: { success: true, data: { token, role, user: { id, name, email } }, message }
       const response = await authAPI.login(formData.email, formData.password);
 
       if (response.success) {
         // Store the JWT token and user info
         localStorage.setItem('authToken', response.data.token);
-        localStorage.setItem('refreshToken', response.data.refreshToken);
         localStorage.setItem('user', JSON.stringify(response.data.user));
 
         // Debug: Log user data to see structure
-        console.log('Login response user data:', response.data.user);
+        console.log('✅ Login successful');
+        console.log('User:', response.data.user);
 
-        // Store agentId and phoneId from user's phone if available
-        if (response.data.user.phone?.agentId) {
-          console.log('Storing agentId:', response.data.user.phone.agentId);
-          console.log('Storing phoneId:', response.data.user.phone._id);
-          localStorage.setItem('agentId', response.data.user.phone.agentId);
-          localStorage.setItem('phoneId', response.data.user.phone._id);
-        } else {
-          console.warn('No agentId found in user.phone. User data:', response.data.user);
-          // Try to fetch user's phone/agent info separately if not in login response
-          try {
-            const userResponse = await authAPI.getCurrentUser();
-            console.log('Current user data:', userResponse);
-            if (userResponse.data?.user?.phone?.agentId) {
-              localStorage.setItem('agentId', userResponse.data.user.phone.agentId);
-              localStorage.setItem('phoneId', userResponse.data.user.phone._id);
-              console.log('AgentId stored from /auth/me:', userResponse.data.user.phone.agentId);
-              console.log('PhoneId stored from /auth/me:', userResponse.data.user.phone._id);
-            }
-          } catch (fetchErr) {
-            console.error('Failed to fetch current user:', fetchErr);
-          }
-        }
+        toast.success('Login successful! Redirecting...');
 
         // Navigate to dashboard
         navigate('/dashboard');
       } else {
-        setError('Login failed. Please try again.');
+        const msg = response.message || 'Login failed. Please try again.';
+        setError(msg);
+        toast.error(msg);
       }
     } catch (err) {
       console.error('Login error:', err);
+      let errorMessage = 'An error occurred. Please try again.';
 
       // Handle different error types
       if (err.response?.status === 401) {
-        setError('Invalid email or password');
+        errorMessage = 'Invalid email or password';
       } else if (err.response?.data?.message) {
-        setError(err.response.data.message);
+        errorMessage = err.response.data.message;
       } else if (err.code === 'ERR_NETWORK' || err.message === 'Network Error') {
-        setError('Cannot connect to server. Please check if the backend is running.');
-      } else {
-        setError('An error occurred. Please try again.');
+        errorMessage = 'Cannot connect to server. Please check if the backend is running.';
       }
+      
+      setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -100,14 +80,14 @@ const Login = () => {
           <div className="inline-flex items-center gap-3 rounded-full bg-white/20 px-5 py-2 text-sm backdrop-blur-md border border-white/30 shadow-lg">
             <span className="inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400 animate-pulse shadow-lg shadow-emerald-400/50" />
             <span className="uppercase tracking-[0.16em] text-white font-bold">
-              Realtime Voice AI
+            AI Agent
             </span>
           </div>
           <h1 className="text-4xl md:text-5xl font-bold leading-tight text-left text-white" style={{ textShadow: '0 2px 8px rgba(0,0,0,0.3)' }}>
-            Operate all your <span className="text-emerald-200 font-extrabold drop-shadow-[0_0_12px_rgba(16,185,129,0.5)]">voice campaigns</span> from one Place
+            Manage all your <span className="text-emerald-200 font-extrabold drop-shadow-[0_0_12px_rgba(16,185,129,0.5)]">customer conversations</span> from one Place
           </h1>
           <p className="text-base md:text-lg text-white/95 font-semibold text-left" style={{ textShadow: '0 1px 4px rgba(0,0,0,0.3)' }}>
-          Monitor live calls, agents, and credits in realtime with a seamless dashboard designed for smooth tracking and better control.
+          Monitor live chats, user interactions, and engagement in realtime with a seamless dashboard designed for smooth tracking and better control.
           </p>
         </div>
       </div>
@@ -126,7 +106,7 @@ const Login = () => {
             />
             <div>
               <p className="text-xs uppercase tracking-[0.16em] text-zinc-500">
-                Voice AI Control
+                AI Agent
               </p>
               <p className="text-lg font-semibold text-zinc-900">Operations Dashboard</p>
             </div>
@@ -138,11 +118,6 @@ const Login = () => {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-5">
-              {error && (
-                <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-                  <p className="text-sm font-medium text-red-600 text-center">{error}</p>
-                </div>
-              )}
               
               <div className="space-y-2">
                 <label className="text-sm font-semibold text-zinc-700">Email</label>
@@ -174,9 +149,6 @@ const Login = () => {
                     {showPassword ? <FaEyeSlash size={20} /> : <FaEye size={20} />}
                   </button>
                 </div>
-                {formData.password.length > 0 && formData.password.length < 16 && (
-                  <p className="text-sm text-amber-600 mt-1 font-medium">Password must be at least 16 characters</p>
-                )}
               </div>
 
               <button

@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 import { FaBars, FaPhone } from 'react-icons/fa';
 
@@ -46,6 +48,7 @@ function App() {
         v7_relativeSplatPath: true,
       }}
     >
+      <ToastContainer position="top-right" autoClose={3000} hideProgressBar={false} newestOnTop={false} closeOnClick rtl={false} pauseOnFocusLoss draggable pauseOnHover theme="light" />
 
       <Routes>
         {/* Public Routes */}

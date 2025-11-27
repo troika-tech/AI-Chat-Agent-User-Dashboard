@@ -36,7 +36,6 @@ const UserMenu = () => {
     } finally {
       // Clear local storage
       localStorage.removeItem('authToken');
-      localStorage.removeItem('refreshToken');
       localStorage.removeItem('user');
       setOpen(false);
       navigate('/login');
