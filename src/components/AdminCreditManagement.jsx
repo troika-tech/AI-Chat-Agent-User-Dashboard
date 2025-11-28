@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FaSearch, FaCoins, FaPlus, FaMinus, FaHistory, FaUser, FaSpinner } from 'react-icons/fa';
 import axios from 'axios';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+import { API_BASE_URL } from '../config/api.config';
 
 const AdminCreditManagement = () => {
   const [users, setUsers] = useState([]);

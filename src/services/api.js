@@ -1,13 +1,8 @@
 import axios from 'axios';
 import { API_BASE_URL, DEMO_MODE } from '../config/api.config';
 
-// Log API configuration on first load
-if (typeof window !== 'undefined' && !window.__API_CONFIG_LOGGED__) {
-  window.__API_CONFIG_LOGGED__ = true;
-  console.log('🔧 API Configuration:');
-  console.log(`   Base URL: ${API_BASE_URL}`);
-  console.log(`   Demo Mode: ${DEMO_MODE ? 'ON (Mock Data)' : 'OFF (Real API)'}`);
-}
+// API client is now configured via api.config.js
+// To change backend URL, edit src/config/api.config.js
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -96,13 +91,219 @@ export const authAPI = {
 
   // Get user plan info - GET /api/user/plan
   getUserPlan: async () => {
+    if (DEMO_MODE) {
+      await mockDelay(200);
+      return {
+        success: true,
+        data: {
+          name: 'Premium Plan',
+          tokens: 5420,
+          days_remaining: 28,
+          max_users: 'Unlimited',
+          expiry_date: new Date(Date.now() + 28 * 24 * 60 * 60 * 1000).toISOString(),
+        }
+      };
+    }
     const response = await api.get('/api/user/plan');
     return response.data;
   },
 
   // Get user usage stats - GET /api/user/usage
   getUserUsage: async () => {
+    if (DEMO_MODE) {
+      await mockDelay(200);
+      return {
+        success: true,
+        data: {
+          total_messages: 1842,
+          unique_users: 624,
+          total_duration: 176832, // in seconds (49 hours 12 minutes)
+          last_activity: new Date(Date.now() - 3600000).toISOString(), // 1 hour ago
+        }
+      };
+    }
     const response = await api.get('/api/user/usage');
+    return response.data;
+  },
+
+  // Get user sessions (top chats) - GET /api/user/sessions
+  getSessions: async (dateRange = '7days') => {
+    if (DEMO_MODE) {
+      await mockDelay(200);
+      return {
+        success: true,
+        data: {
+          sessions: [
+            {
+              session_id: 'session-1',
+              messages: [
+                { content: 'Hello, how can I help?', sender: 'bot', timestamp: new Date(Date.now() - 3600000).toISOString() },
+                { content: 'I need help with pricing', sender: 'user', timestamp: new Date(Date.now() - 3500000).toISOString() },
+              ],
+              duration: 1245,
+            },
+          ],
+          avgDurationSeconds: 890,
+        }
+      };
+    }
+    const response = await api.get('/api/user/sessions', { params: { dateRange } });
+    return response.data;
+  },
+
+  // Get user analytics (chart data) - GET /api/user/analytics
+  getAnalytics: async (dateRange = '7days') => {
+    if (DEMO_MODE) {
+      await mockDelay(200);
+      // Generate last 7 days mock data
+      const mockChartData = [];
+      const today = new Date();
+      for (let i = 6; i >= 0; i--) {
+        const date = new Date(today);
+        date.setDate(date.getDate() - i);
+        mockChartData.push({
+          date: date.toISOString().split('T')[0],
+          count: Math.floor(Math.random() * 100) + 50,
+        });
+      }
+      return {
+        success: true,
+        data: {
+          chartData: mockChartData,
+          totalMessages: 1842,
+          totalSessions: 624,
+          avgDurationSeconds: 890,
+          avgMessagesPerChat: 5,
+        }
+      };
+    }
+    const response = await api.get('/api/user/analytics', { params: { dateRange } });
+    return response.data;
+  },
+
+  // Get hot leads (users with buying intent keywords) - GET /api/user/hot-leads
+  getHotLeads: async (params = {}) => {
+    const { page = 1, limit = 20, searchTerm = '', dateRange = '30days', startDate, endDate } = params;
+    if (DEMO_MODE) {
+      await mockDelay(300);
+      const mockLeads = [
+        {
+          id: 'session-1',
+          session_id: 'session-1',
+          phone: '+91 98765 43210',
+          email: 'user1@example.com',
+          name: 'Rajesh Kumar',
+          matchedKeywords: ['pricing', 'quote', 'demo'],
+          messageSnippets: [
+            { content: 'Can you share the pricing details?', timestamp: new Date(Date.now() - 3600000).toISOString() },
+            { content: 'I would like to see a demo', timestamp: new Date(Date.now() - 3500000).toISOString() },
+          ],
+          hotWordCount: 3,
+          firstDetectedAt: new Date(Date.now() - 86400000).toISOString(),
+          lastDetectedAt: new Date(Date.now() - 3600000).toISOString(),
+        },
+        {
+          id: 'session-2',
+          session_id: 'session-2',
+          phone: '+91 98765 43211',
+          email: 'user2@example.com',
+          name: 'Priya Sharma',
+          matchedKeywords: ['buy', 'order'],
+          messageSnippets: [
+            { content: 'I want to buy this product', timestamp: new Date(Date.now() - 7200000).toISOString() },
+          ],
+          hotWordCount: 2,
+          firstDetectedAt: new Date(Date.now() - 172800000).toISOString(),
+          lastDetectedAt: new Date(Date.now() - 7200000).toISOString(),
+        },
+      ];
+      return {
+        success: true,
+        data: {
+          leads: mockLeads,
+          hotWords: ['pricing', 'price', 'cost', 'quote', 'demo', 'buy', 'purchase', 'order'],
+          total: mockLeads.length,
+          currentPage: 1,
+          totalPages: 1,
+        }
+      };
+    }
+    const response = await api.get('/api/user/hot-leads', {
+      params: { page, limit, searchTerm, dateRange, startDate, endDate }
+    });
+    return response.data;
+  },
+
+  // Get messages (chat history) - GET /api/user/messages
+  getMessages: async (params = {}) => {
+    const { page = 1, limit = 25, email, phone, session_id, is_guest, dateRange, startDate, endDate, search } = params;
+    if (DEMO_MODE) {
+      await mockDelay(300);
+      const contacts = [
+        { id: 'guest-449', name: 'Guest 449', type: 'guest' },
+        { id: 'guest-448', name: 'Guest 448', type: 'guest' },
+        { id: 'guest-447', name: 'Guest 447', type: 'guest' },
+      ];
+      const mockMessages = [];
+      const agentMsgs = [
+        'The cost for WhatsApp marketing messages is **INR 0.60 per message**. Here are the current packages available:\n\n**Package 1:** 3 Lac Messages...',
+        'The pricing for our WhatsApp marketing service is set at **₹0.60 per message**.',
+      ];
+      const userMsgs = ['What is the cost?', 'Pricing', 'Price?'];
+      
+      for (let i = 0; i < 50; i++) {
+        const isAgent = i % 2 === 0;
+        const contact = contacts[Math.floor(i / 2) % contacts.length];
+        mockMessages.push({
+          id: `msg-${i + 1}`,
+          content: isAgent ? agentMsgs[i % agentMsgs.length] : userMsgs[i % userMsgs.length],
+          sender: isAgent ? 'bot' : 'user',
+          timestamp: new Date(Date.now() - i * 3600000).toISOString(),
+          session_id: `session-${Math.floor(i / 4)}`,
+          email: null,
+          phone: null,
+          is_guest: true,
+          name: contact.name,
+        });
+      }
+      
+      const total = mockMessages.length;
+      const startIdx = (page - 1) * limit;
+      const paginatedMessages = mockMessages.slice(startIdx, startIdx + limit);
+      
+      return {
+        success: true,
+        data: {
+          messages: paginatedMessages,
+          totalPages: Math.ceil(total / limit),
+          currentPage: page,
+          totalMessages: total,
+        }
+      };
+    }
+    const response = await api.get('/api/user/messages', {
+      params: { page, limit, email, phone, session_id, is_guest, dateRange, startDate, endDate, search }
+    });
+    return response.data;
+  },
+
+  // Get all contacts for filter dropdowns - GET /api/user/contacts
+  getAllContacts: async () => {
+    if (DEMO_MODE) {
+      await mockDelay(200);
+      return {
+        success: true,
+        data: {
+          contacts: ['+919876543210', '+919876543211', 'john@example.com'],
+          guests: Array.from({ length: 50 }, (_, i) => ({
+            session_id: `session-${i + 1}`,
+            label: `Guest ${i + 1}`,
+            number: i + 1,
+          })),
+        }
+      };
+    }
+    const response = await api.get('/api/user/contacts');
     return response.data;
   },
 };

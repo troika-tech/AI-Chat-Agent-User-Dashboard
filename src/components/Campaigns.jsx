@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { FaPlus, FaSearch, FaEdit, FaPause, FaPlay, FaChartLine, FaTrash, FaFilter, FaSpinner, FaUsers, FaEye, FaCalendar, FaUpload, FaFileAlt, FaDownload, FaTimes, FaBullseye } from 'react-icons/fa';
 import { callAPI, campaignAPI } from '../services/api';
+import { API_BASE_URL } from '../config/api.config';
 
 const Campaigns = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -451,7 +452,7 @@ const Campaigns = () => {
       const limit = 10000; // Max allowed by backend validation - supports large campaigns
 
       while (hasMore) {
-        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/v1/campaigns/${selectedCampaign._id}/contacts?page=${page}&limit=${limit}`, {
+        const response = await fetch(`${API_BASE_URL}/api/v1/campaigns/${selectedCampaign._id}/contacts?page=${page}&limit=${limit}`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
             'Content-Type': 'application/json',

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { FaSpinner, FaPlay, FaPause, FaCheckCircle, FaTimesCircle, FaPhone, FaClock, FaUsers, FaSyncAlt } from 'react-icons/fa';
 import { campaignAPI, callAPI, wsAPI } from '../services/api';
+import { API_BASE_URL } from '../config/api.config';
 
 const LiveStatus = () => {
   const [campaigns, setCampaigns] = useState([]);
@@ -44,7 +45,7 @@ const LiveStatus = () => {
           try {
             // Get debug info for detailed stats
             const debugResponse = await fetch(
-              `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/campaigns/${campaign._id}/debug`
+              `${API_BASE_URL}/api/campaigns/${campaign._id}/debug`
             );
             
             if (debugResponse.ok) {

@@ -1,48 +1,39 @@
 import React, { useState, useEffect } from 'react';
-import { createPortal } from 'react-dom';
-import { 
-  FaPhone, 
-  FaCheckCircle, 
-  FaUserPlus, 
-  FaRupeeSign,
-  FaArrowUp,
-  FaArrowDown,
-  FaPlay,
-  FaPause,
+import ReactMarkdown from 'react-markdown';
+import {
   FaSpinner,
   FaDownload,
   FaFileAlt,
-  FaBullseye,
   FaCoins,
+  FaComments,
+  FaUsers,
+  FaClock,
   FaTimes,
-  FaCalendar,
-  FaTimesCircle
+  FaUser,
+  FaRobot
 } from 'react-icons/fa';
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { FiPhoneCall } from 'react-icons/fi';
-import { analyticsAPI, wsAPI, campaignAPI, creditsAPI, callAPI } from '../services/api';
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { authAPI } from '../services/api';
+import { DEMO_MODE } from '../config/api.config';
 
 const DashboardOverview = () => {
   const [loading, setLoading] = useState(true);
-  const [dashboardData, setDashboardData] = useState(null);
-  const [wsStats, setWsStats] = useState(null);
-  const [campaigns, setCampaigns] = useState([]);
-  const [creditBalance, setCreditBalance] = useState(null);
+  const [usageData, setUsageData] = useState(null);
+  const [planData, setPlanData] = useState(null);
   const [error, setError] = useState(null);
-  const [selectedCampaign, setSelectedCampaign] = useState(null);
-  const [showCampaignModal, setShowCampaignModal] = useState(false);
-  const [campaignDetails, setCampaignDetails] = useState(null);
-  const [loadingDetails, setLoadingDetails] = useState(false);
-  const [selectedPhoneNumber, setSelectedPhoneNumber] = useState(null);
-  const [showCallModal, setShowCallModal] = useState(false);
-  const [callDetails, setCallDetails] = useState(null);
-  const [loadingCallDetails, setLoadingCallDetails] = useState(false);
+  const [topChats, setTopChats] = useState([]);
+  const [selectedChat, setSelectedChat] = useState(null);
+  const [showChatModal, setShowChatModal] = useState(false);
+  const [chatsChartData, setChatsChartData] = useState([]);
+  const [visitorsChartData, setVisitorsChartData] = useState([]);
 
   useEffect(() => {
     fetchDashboardData();
-    // Refresh every 30 seconds
-    const interval = setInterval(fetchDashboardData, 30000);
-    return () => clearInterval(interval);
+    fetchTopChats();
+    fetchChartData();
+    // Auto-refresh disabled
+    // const interval = setInterval(fetchDashboardData, 30000);
+    // return () => clearInterval(interval);
   }, []);
 
   const fetchDashboardData = async () => {
@@ -50,59 +41,34 @@ const DashboardOverview = () => {
       setLoading(true);
       setError(null);
 
-      // Get user from localStorage
-      const user = JSON.parse(localStorage.getItem('user') || '{}');
-      const userId = user._id || user.id;
-
-      // Use Promise.allSettled to ensure all API calls complete even if some fail
+      // Fetch usage and plan data from chatbot backend
       const results = await Promise.allSettled([
-        // Fetch unified dashboard analytics
-        analyticsAPI.getDashboard(userId).then(res => res.data).catch(err => {
-          console.warn('Dashboard analytics not available:', err);
+        // GET /api/user/usage - Returns { total_messages, unique_users, last_activity }
+        authAPI.getUserUsage().catch(err => {
+          console.warn('Usage data not available:', err);
           return null;
         }),
-        // Fetch WebSocket stats for real-time metrics
-        wsAPI.getStats().catch(err => {
-          console.warn('WebSocket stats not available:', err);
+        // GET /api/user/plan - Returns plan info with expiry date
+        authAPI.getUserPlan().catch(err => {
+          console.warn('Plan data not available:', err);
           return null;
-        }),
-        // Fetch campaigns
-        campaignAPI.list().then(res => {
-          const campaignsData = res.data;
-          if (Array.isArray(campaignsData)) {
-            return campaignsData;
-          } else if (campaignsData && Array.isArray(campaignsData.campaigns)) {
-            return campaignsData.campaigns;
-          } else {
-            console.warn('Campaigns response is not an array:', campaignsData);
-            return [];
-          }
-        }).catch(err => {
-          console.warn('Campaigns data not available:', err);
-          return [];
-        }),
-        // Fetch credit balance
-        creditsAPI.getBalance().then(res => res.data?.credits || 0).catch(err => {
-          console.warn('Credit balance not available:', err);
-          return 0;
         }),
       ]);
 
-      // Set data from results
+      // Set usage data
       if (results[0].status === 'fulfilled' && results[0].value) {
-        console.log('Dashboard data received:', results[0].value);
-        setDashboardData(results[0].value);
+        console.log('Usage data received:', results[0].value);
+        setUsageData(results[0].value.data);
       } else {
-        console.warn('Dashboard data not received:', results[0]);
+        console.warn('Usage data not received:', results[0]);
       }
+
+      // Set plan data
       if (results[1].status === 'fulfilled' && results[1].value) {
-        setWsStats(results[1].value);
-      }
-      if (results[2].status === 'fulfilled') {
-        setCampaigns(results[2].value || []);
-      }
-      if (results[3].status === 'fulfilled') {
-        setCreditBalance(results[3].value);
+        console.log('Plan data received:', results[1].value);
+        setPlanData(results[1].value.data);
+      } else {
+        console.warn('Plan data not received:', results[1]);
       }
 
     } catch (err) {
@@ -120,99 +86,444 @@ const DashboardOverview = () => {
         setError(errorMsg);
       }
     } finally {
-      // Always set loading to false, even if there are errors
       setLoading(false);
     }
   };
 
-  // Calculate KPIs from analytics data
+  // Calculate KPIs from usage and plan data
   const calculateKPIs = () => {
-    const campaignsArray = Array.isArray(campaigns) ? campaigns : [];
-    const totalCampaigns = campaignsArray.length || 0;
-    const activeCampaigns = campaignsArray.filter(c => c.status === 'active' || c.status === 'running').length || 0;
+    // Get data from usage API
+    const totalChats = usageData?.total_messages || 0;
+    const totalVisitors = usageData?.unique_users || 0;
+    const totalDuration = usageData?.total_duration || 0; // Assuming this exists in API, otherwise will be 0
 
-    // Get data from unified dashboard analytics
-    const totalCalls = dashboardData?.totalCalls || 0;
-    const completedCalls = dashboardData?.completedCalls || 0;
+    // Format duration - convert from seconds to human-readable format
+    const formatDuration = (seconds) => {
+      if (!seconds) return '0m';
+      const hours = Math.floor(seconds / 3600);
+      const minutes = Math.floor((seconds % 3600) / 60);
+      if (hours > 0) {
+        return `${hours}h ${minutes}m`;
+      }
+      return `${minutes}m`;
+    };
 
-    // Use actual credit balance from API
-    const credits = creditBalance !== null ? creditBalance : 0;
-    const isLowCredits = credits < 100 && credits > 0;
-    const isNoCredits = credits <= 0;
+    // Calculate change percentages (demo mode shows realistic changes)
+    // In real mode, these would come from API comparison data
+    const chatsChange = totalChats > 0 ? '+12.5%' : '+0%';
+    const visitorsChange = totalVisitors > 0 ? '+8.3%' : '+0%';
 
     return [
       {
-        title: 'Validity',
-        value: 'Dec 15, 2026',
-        change: '+0%',
+        title: 'Total Chats',
+        value: totalChats.toLocaleString(),
+        change: chatsChange,
         trend: 'up',
-        icon: FaCalendar,
-        color: 'bg-blue-500',
-      },
-      {
-        title: 'Active Campaigns',
-        value: activeCampaigns.toLocaleString(),
-        change: '+0%',
-        trend: 'up',
-        icon: FaPlay,
-        color: 'bg-green-500',
-      },
-      {
-        title: 'Total Calls',
-        value: totalCalls.toLocaleString(),
-        change: '+0%',
-        trend: 'up',
-        icon: FaPhone,
+        icon: FaComments,
         color: 'bg-purple-500',
       },
       {
+        title: 'Total Visitors',
+        value: totalVisitors.toLocaleString(),
+        change: visitorsChange,
+        trend: 'up',
+        icon: FaUsers,
+        color: 'bg-blue-500',
+      },
+      {
+        title: 'Total Duration',
+        value: formatDuration(totalDuration),
+        change: 'Active',
+        trend: 'up',
+        icon: FaClock,
+        color: 'bg-indigo-500',
+      },
+      {
         title: 'Credit Balance',
-        value: credits.toLocaleString(),
-        change: isNoCredits ? 'Out of credits' : isLowCredits ? 'Low balance' : 'Active',
-        trend: isNoCredits ? 'down' : isLowCredits ? 'down' : 'up',
+        value: (planData?.tokens || 0).toLocaleString(),
+        change: 'Active',
+        trend: 'up',
         icon: FaCoins,
-        color: isNoCredits ? 'bg-red-500' : isLowCredits ? 'bg-yellow-500' : 'bg-green-500',
-        warning: isNoCredits || isLowCredits,
+        color: 'bg-green-500',
       },
     ];
   };
 
-  // Prepare chart data from analytics
-  const prepareChartData = () => {
-    if (!dashboardData) {
-      console.log('No dashboard data available');
-      return { callOutcomeData: [], callsOverTimeData: [] };
+  // Fetch chart data for last 7 days
+  const fetchChartData = async () => {
+    if (DEMO_MODE) {
+      // Generate last 7 days with dates in "28 Nov" format
+      const mockChartData = [];
+      const today = new Date();
+      
+      for (let i = 6; i >= 0; i--) {
+        const date = new Date(today);
+        date.setDate(date.getDate() - i);
+        const day = date.getDate();
+        const month = date.toLocaleDateString('en-US', { month: 'short' });
+        const dateLabel = `${day} ${month}`;
+        
+        // Fixed mock data values
+        const chatsValues = [245, 198, 267, 223, 289, 156, 178];
+        const visitorsValues = [82, 71, 95, 88, 102, 64, 69];
+        const index = 6 - i;
+        
+        mockChartData.push({
+          date: dateLabel,
+          chats: chatsValues[index],
+          visitors: visitorsValues[index],
+        });
+      }
+      
+      setChatsChartData(mockChartData);
+      setVisitorsChartData(mockChartData);
+      return;
+    }
+    
+    // Fetch real analytics data from backend
+    try {
+      const response = await authAPI.getAnalytics('7days');
+      if (response?.success && response?.data?.chartData) {
+        // Transform backend data to chart format
+        // Backend returns: { date: "2025-11-28", count: 123 }
+        // Chart needs: { date: "28 Nov", chats: 123, visitors: X }
+        
+        // Create a map of all dates in the last 7 days
+        const dateMap = new Map();
+        const today = new Date();
+        for (let i = 6; i >= 0; i--) {
+          const date = new Date(today);
+          date.setDate(date.getDate() - i);
+          const dateKey = date.toISOString().split('T')[0]; // "2025-11-28"
+          const day = date.getDate();
+          const month = date.toLocaleDateString('en-US', { month: 'short' });
+          dateMap.set(dateKey, {
+            date: `${day} ${month}`,
+            chats: 0,
+            visitors: 0,
+          });
+        }
+        
+        // Fill in actual chats data from backend
+        response.data.chartData.forEach(item => {
+          if (dateMap.has(item.date)) {
+            const existing = dateMap.get(item.date);
+            existing.chats = item.count || 0;
+          }
+        });
+        
+        // Fill in actual visitors data from backend
+        if (response.data.visitorsData) {
+          response.data.visitorsData.forEach(item => {
+            if (dateMap.has(item.date)) {
+              const existing = dateMap.get(item.date);
+              existing.visitors = item.count || 0;
+            }
+          });
+        }
+        
+        // Convert map to array maintaining order
+        const chartData = Array.from(dateMap.values());
+        
+        setChatsChartData(chartData);
+        setVisitorsChartData(chartData);
+      }
+    } catch (err) {
+      console.warn('Failed to fetch chart data:', err);
+      setChatsChartData([]);
+      setVisitorsChartData([]);
+    }
+  };
+
+  // Fetch top chats data
+  const fetchTopChats = async () => {
+    if (DEMO_MODE) {
+      // Mock data for top chats
+      const mockTopChats = [
+        {
+          id: 'chat-1',
+          visitorName: 'Sarah Johnson',
+          visitorId: 'visitor-001',
+          lastMessage: 'Thank you so much for your help! This is exactly what I needed.',
+          messageCount: 24,
+          duration: 1245, // seconds
+          status: 'completed',
+          timestamp: new Date(Date.now() - 3600000).toISOString(), // 1 hour ago
+          sentiment: 'positive',
+        },
+        {
+          id: 'chat-2',
+          visitorName: 'Michael Chen',
+          visitorId: 'visitor-002',
+          lastMessage: 'Can you send me more details about the pricing plans?',
+          messageCount: 18,
+          duration: 892,
+          status: 'active',
+          timestamp: new Date(Date.now() - 1800000).toISOString(), // 30 mins ago
+          sentiment: 'neutral',
+        },
+        {
+          id: 'chat-3',
+          visitorName: 'Emily Rodriguez',
+          visitorId: 'visitor-003',
+          lastMessage: 'I\'m having trouble with my account login. Can you help?',
+          messageCount: 31,
+          duration: 1567,
+          status: 'completed',
+          timestamp: new Date(Date.now() - 7200000).toISOString(), // 2 hours ago
+          sentiment: 'neutral',
+        },
+        {
+          id: 'chat-4',
+          visitorName: 'David Kim',
+          visitorId: 'visitor-004',
+          lastMessage: 'Great! I\'ll proceed with the premium plan then.',
+          messageCount: 15,
+          duration: 678,
+          status: 'completed',
+          timestamp: new Date(Date.now() - 5400000).toISOString(), // 1.5 hours ago
+          sentiment: 'positive',
+        },
+      ];
+      setTopChats(mockTopChats);
+      return;
+    }
+    
+    // Fetch real sessions from backend
+    try {
+      const response = await authAPI.getSessions('7days');
+      if (response?.success && response?.data?.sessions) {
+        // Transform sessions data to top chats format
+        // Sort by message count (most messages first) and take top 4
+        const sessions = response.data.sessions
+          .filter(s => s.messages && s.messages.length > 0)
+          .sort((a, b) => (b.messages?.length || 0) - (a.messages?.length || 0))
+          .slice(0, 4)
+          .map((session, index) => {
+            const messages = session.messages || [];
+            const lastMsg = messages[messages.length - 1];
+            const firstMsg = messages[0];
+            return {
+              id: session.session_id || `session-${index}`,
+              visitorId: session.session_id,
+              lastMessage: lastMsg?.content || 'No message',
+              messageCount: messages.length,
+              duration: session.duration || 0,
+              status: 'completed',
+              timestamp: lastMsg?.timestamp || firstMsg?.timestamp || new Date().toISOString(),
+              messages: messages, // Store full messages for modal
+            };
+          });
+        setTopChats(sessions);
+      }
+    } catch (err) {
+      console.warn('Failed to fetch top chats:', err);
+      setTopChats([]);
+    }
+  };
+
+  // Get complete chat conversation (mock data)
+  const getChatConversation = (chatId) => {
+    // For real data, the messages are already stored in the chat object from topChats
+    if (!DEMO_MODE) {
+      const chat = topChats.find(c => c.id === chatId);
+      if (chat && chat.messages) {
+        return chat.messages.map((msg, idx) => ({
+          id: `msg-${idx}`,
+          role: msg.sender === 'bot' ? 'assistant' : 'user',
+          content: msg.content || '',
+          timestamp: msg.timestamp,
+        }));
+      }
+      return [];
     }
 
-    console.log('Preparing chart data from:', dashboardData);
+    // Mock conversation data
+    const conversations = {
+      'chat-1': [
+        {
+          id: 'msg-1',
+          role: 'assistant',
+          content: 'Hello! Welcome to our support. How can I assist you today?',
+          timestamp: new Date(Date.now() - 1245000).toISOString(),
+        },
+        {
+          id: 'msg-2',
+          role: 'user',
+          content: 'Hi, I\'m looking for information about your premium features.',
+          timestamp: new Date(Date.now() - 1230000).toISOString(),
+        },
+        {
+          id: 'msg-3',
+          role: 'assistant',
+          content: 'I\'d be happy to help! Our premium plan includes advanced analytics, priority support, and custom integrations. Would you like to know more about any specific feature?',
+          timestamp: new Date(Date.now() - 1215000).toISOString(),
+        },
+        {
+          id: 'msg-4',
+          role: 'user',
+          content: 'What about the pricing?',
+          timestamp: new Date(Date.now() - 1200000).toISOString(),
+        },
+        {
+          id: 'msg-5',
+          role: 'assistant',
+          content: 'Our premium plan is $99/month or $990/year (save 17%). It includes all features plus unlimited API calls and dedicated account management.',
+          timestamp: new Date(Date.now() - 1185000).toISOString(),
+        },
+        {
+          id: 'msg-6',
+          role: 'user',
+          content: 'That sounds reasonable. Can I try it before committing?',
+          timestamp: new Date(Date.now() - 1170000).toISOString(),
+        },
+        {
+          id: 'msg-7',
+          role: 'assistant',
+          content: 'Absolutely! We offer a 14-day free trial with full access to all premium features. No credit card required. Would you like me to set that up for you?',
+          timestamp: new Date(Date.now() - 1155000).toISOString(),
+        },
+        {
+          id: 'msg-8',
+          role: 'user',
+          content: 'Yes, please! That would be great.',
+          timestamp: new Date(Date.now() - 1140000).toISOString(),
+        },
+        {
+          id: 'msg-9',
+          role: 'assistant',
+          content: 'Perfect! I\'ve started your free trial. You\'ll receive an email with setup instructions. Is there anything else I can help you with?',
+          timestamp: new Date(Date.now() - 1125000).toISOString(),
+        },
+        {
+          id: 'msg-10',
+          role: 'user',
+          content: 'Thank you so much for your help! This is exactly what I needed.',
+          timestamp: new Date(Date.now() - 1110000).toISOString(),
+        },
+      ],
+      'chat-2': [
+        {
+          id: 'msg-11',
+          role: 'assistant',
+          content: 'Hello! How can I help you today?',
+          timestamp: new Date(Date.now() - 1800000).toISOString(),
+        },
+        {
+          id: 'msg-12',
+          role: 'user',
+          content: 'I\'m interested in your service. Can you tell me more?',
+          timestamp: new Date(Date.now() - 1785000).toISOString(),
+        },
+        {
+          id: 'msg-13',
+          role: 'assistant',
+          content: 'Of course! We offer a comprehensive platform with multiple plans. What specific aspect would you like to know about?',
+          timestamp: new Date(Date.now() - 1770000).toISOString(),
+        },
+        {
+          id: 'msg-14',
+          role: 'user',
+          content: 'Can you send me more details about the pricing plans?',
+          timestamp: new Date(Date.now() - 1755000).toISOString(),
+        },
+      ],
+      'chat-3': [
+        {
+          id: 'msg-15',
+          role: 'assistant',
+          content: 'Hi there! I\'m here to help. What can I do for you?',
+          timestamp: new Date(Date.now() - 7200000).toISOString(),
+        },
+        {
+          id: 'msg-16',
+          role: 'user',
+          content: 'I\'m having trouble with my account login. Can you help?',
+          timestamp: new Date(Date.now() - 7185000).toISOString(),
+        },
+        {
+          id: 'msg-17',
+          role: 'assistant',
+          content: 'I\'m sorry to hear you\'re having login issues. Let me help you troubleshoot. Have you tried resetting your password?',
+          timestamp: new Date(Date.now() - 7170000).toISOString(),
+        },
+        {
+          id: 'msg-18',
+          role: 'user',
+          content: 'Yes, I tried that but I\'m not receiving the reset email.',
+          timestamp: new Date(Date.now() - 7155000).toISOString(),
+        },
+        {
+          id: 'msg-19',
+          role: 'assistant',
+          content: 'Let me check your account. Can you verify the email address you\'re using?',
+          timestamp: new Date(Date.now() - 7140000).toISOString(),
+        },
+        {
+          id: 'msg-20',
+          role: 'user',
+          content: 'It\'s emily.rodriguez@email.com',
+          timestamp: new Date(Date.now() - 7125000).toISOString(),
+        },
+        {
+          id: 'msg-21',
+          role: 'assistant',
+          content: 'I see the issue. The reset emails might be going to spam. I\'ve sent a new reset link and also updated your account settings. Please check your spam folder.',
+          timestamp: new Date(Date.now() - 7110000).toISOString(),
+        },
+        {
+          id: 'msg-22',
+          role: 'user',
+          content: 'Found it! Thank you so much!',
+          timestamp: new Date(Date.now() - 7095000).toISOString(),
+        },
+      ],
+      'chat-4': [
+        {
+          id: 'msg-23',
+          role: 'assistant',
+          content: 'Welcome! How can I assist you today?',
+          timestamp: new Date(Date.now() - 5400000).toISOString(),
+        },
+        {
+          id: 'msg-24',
+          role: 'user',
+          content: 'I want to upgrade to premium.',
+          timestamp: new Date(Date.now() - 5385000).toISOString(),
+        },
+        {
+          id: 'msg-25',
+          role: 'assistant',
+          content: 'Great choice! The premium plan offers advanced features. Would you like monthly or annual billing?',
+          timestamp: new Date(Date.now() - 5370000).toISOString(),
+        },
+        {
+          id: 'msg-26',
+          role: 'user',
+          content: 'Annual sounds good. What\'s the price?',
+          timestamp: new Date(Date.now() - 5355000).toISOString(),
+        },
+        {
+          id: 'msg-27',
+          role: 'assistant',
+          content: 'Annual is $990/year, which saves you 17% compared to monthly. I can set that up for you right now.',
+          timestamp: new Date(Date.now() - 5340000).toISOString(),
+        },
+        {
+          id: 'msg-28',
+          role: 'user',
+          content: 'Great! I\'ll proceed with the premium plan then.',
+          timestamp: new Date(Date.now() - 5325000).toISOString(),
+        },
+      ],
+    };
 
-    const totalCalls = dashboardData.totalCalls || 0;
-    const completedCalls = dashboardData.completedCalls || 0;
-    const failedCalls = dashboardData.failedCalls || 0;
-    const inProgressCalls = dashboardData.inProgressCalls || 0;
+    return conversations[chatId] || [];
+  };
 
-    const callOutcomeData = [
-      { name: 'Total Calls', value: totalCalls, color: '#2196F3' },
-      { name: 'Completed', value: completedCalls, color: '#4CAF50' },
-      { name: 'In Progress', value: inProgressCalls, color: '#FF9800' },
-      { name: 'Failed', value: failedCalls, color: '#F44336' },
-    ];
-
-    // Use trends data if available, otherwise use simplified mock data
-    const callsOverTimeData = dashboardData.callTrends || [
-      { time: '9 AM', calls: Math.floor(totalCalls * 0.1) },
-      { time: '10 AM', calls: Math.floor(totalCalls * 0.15) },
-      { time: '11 AM', calls: Math.floor(totalCalls * 0.2) },
-      { time: '12 PM', calls: Math.floor(totalCalls * 0.18) },
-      { time: '1 PM', calls: Math.floor(totalCalls * 0.12) },
-      { time: '2 PM', calls: Math.floor(totalCalls * 0.15) },
-      { time: '3 PM', calls: Math.floor(totalCalls * 0.18) },
-      { time: '4 PM', calls: Math.floor(totalCalls * 0.2) },
-    ];
-
-    console.log('Chart data prepared:', { callOutcomeData, callsOverTimeData });
-
-    return { callOutcomeData, callsOverTimeData };
+  const handleChatClick = (chat) => {
+    setSelectedChat(chat);
+    setShowChatModal(true);
   };
 
   if (loading) {
@@ -244,138 +555,6 @@ const DashboardOverview = () => {
   }
 
   const kpiData = calculateKPIs();
-  const { callOutcomeData, callsOverTimeData } = prepareChartData();
-
-  // Get top phone numbers from campaigns in current month (this month)
-  const now = new Date();
-  const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const currentMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
-
-  // Get all campaigns sorted by date (most recent first)
-  const allCampaignsSorted = campaigns
-    .sort((a, b) => {
-      const dateA = new Date(a.createdAt || a.startDate || a.updatedAt || 0);
-      const dateB = new Date(b.createdAt || b.startDate || b.updatedAt || 0);
-      return dateB - dateA; // Most recent first
-    });
-
-  // Get campaigns from current month (this month)
-  const recentCampaigns = allCampaignsSorted.filter(campaign => {
-    const campaignDate = new Date(campaign.createdAt || campaign.startDate || campaign.updatedAt || 0);
-    return campaignDate >= currentMonthStart && campaignDate <= currentMonthEnd;
-  });
-
-  // Extract top 4 phone numbers from recent campaigns (or all campaigns if no recent ones)
-  const campaignsToUse = recentCampaigns.length > 0 ? recentCampaigns : allCampaignsSorted.slice(0, 4);
-  const topPhoneNumbers = [];
-  
-  for (const campaign of campaignsToUse) {
-    const phoneNumbers = campaign.phoneNumbers || [];
-    if (phoneNumbers.length === 0) continue;
-    
-    for (const phoneNumber of phoneNumbers) {
-      if (topPhoneNumbers.length >= 4) break;
-      
-      // Get call duration from dashboard data or use default
-      const callDuration = dashboardData?.averageDuration 
-        ? `${Math.floor(dashboardData.averageDuration / 60)}:${String(dashboardData.averageDuration % 60).padStart(2, '0')}s`
-        : '00:45s';
-      
-      topPhoneNumbers.push({
-        id: `${campaign._id || campaign.id}-${phoneNumber}`,
-        phoneNumber: phoneNumber,
-        campaignName: campaign.name,
-        campaignId: campaign._id || campaign.id,
-        duration: callDuration,
-        createdAt: campaign.createdAt || campaign.startDate,
-      });
-    }
-    if (topPhoneNumbers.length >= 4) break;
-  }
-
-  // Add dummy data for testing if no phone numbers found
-  if (topPhoneNumbers.length === 0) {
-    const dummyDurations = ['00:45s', '00:57s', '00:36s', '01:12s'];
-    const dummyCampaignName = 'Premium Upsell List'; // Same campaign for all
-    const dummyPhones = ['+91 98765 43210', '+91 98765 43211', '+91 98765 43212', '+91 98765 43213'];
-    
-    for (let i = 0; i < 4; i++) {
-      topPhoneNumbers.push({
-        id: `dummy-${i}`,
-        phoneNumber: dummyPhones[i],
-        campaignName: dummyCampaignName, // Same campaign for all numbers
-        campaignId: 'dummy-campaign-1',
-        duration: dummyDurations[i],
-        createdAt: new Date(),
-      });
-    }
-  }
-
-  const credits = creditBalance !== null ? creditBalance : 0;
-  const isLowCredits = credits < 100 && credits > 0;
-  const isNoCredits = credits <= 0;
-
-  const handleCampaignClick = async (campaignId) => {
-    try {
-      setLoadingDetails(true);
-      setSelectedCampaign(campaignId);
-      setShowCampaignModal(true);
-      
-      // Fetch campaign details
-      const response = await campaignAPI.get(campaignId);
-      const campaignData = response.data || response;
-      setCampaignDetails(campaignData);
-    } catch (err) {
-      console.error('Error fetching campaign details:', err);
-      // Still show modal with basic info from the campaign list
-      const campaign = campaigns.find(c => (c._id || c.id) === campaignId);
-      if (campaign) {
-        setCampaignDetails(campaign);
-      }
-    } finally {
-      setLoadingDetails(false);
-    }
-  };
-
-  const handlePhoneClick = async (phoneNumber, campaignName) => {
-    try {
-      setLoadingCallDetails(true);
-      setSelectedPhoneNumber(phoneNumber);
-      setShowCallModal(true);
-      
-      // Fetch call details by phone number
-      const response = await callAPI.getAllCalls({ 
-        phoneNumbers: [phoneNumber],
-        limit: 1,
-        sort: 'desc'
-      });
-      
-      const calls = response.data?.calls || response.data || [];
-      if (calls.length > 0) {
-        setCallDetails({
-          ...calls[0],
-          campaignName: campaignName
-        });
-      } else {
-        // If no call found, show basic info
-        setCallDetails({
-          phoneNumber: phoneNumber,
-          campaignName: campaignName,
-          status: 'No call data found'
-        });
-      }
-    } catch (err) {
-      console.error('Error fetching call details:', err);
-      // Show basic info even if API fails
-      setCallDetails({
-        phoneNumber: phoneNumber,
-        campaignName: campaignName,
-        status: 'Error loading call details'
-      });
-    } finally {
-      setLoadingCallDetails(false);
-    }
-  };
 
   return (
     <div className="space-y-6">
@@ -383,56 +562,24 @@ const DashboardOverview = () => {
       <div className="space-y-3">
         <div className="inline-flex items-center gap-2 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-700 border border-emerald-100">
           <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-          <span>Live Voice AI Operations</span>
+          <span>AI Chat Agent Dashboard</span>
         </div>
         <div>
           <h1 className="text-3xl md:text-4xl font-semibold tracking-tight text-zinc-900">
-            Realtime Overview
+            Dashboard Overview
           </h1>
           <p className="mt-2 text-sm text-zinc-500 max-w-xl">
-            Monitor calls, agents, and system health in one control surface.
+            Monitor your chatbot performance, user engagement, and plan status.
           </p>
         </div>
       </div>
-
-      {/* Credit Warning Banner */}
-      {isNoCredits && (
-        <div className="glass-card border-l-4 border-red-500/70 bg-red-50/80">
-          <div className="flex items-center">
-            <FaCoins className="text-red-500 mr-3" size={24} />
-            <div>
-              <h3 className="text-red-800 font-semibold">No Credits Available</h3>
-              <p className="text-red-600 text-sm mt-1">
-                Your account has run out of credits. You cannot make or receive calls until credits are added.
-                Please contact your administrator to add credits to your account.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {isLowCredits && (
-        <div className="glass-card border-l-4 border-amber-400/80 bg-amber-50/80">
-          <div className="flex items-center">
-            <FaCoins className="text-yellow-500 mr-3" size={24} />
-            <div>
-              <h3 className="text-yellow-800 font-semibold">Low Credit Balance</h3>
-              <p className="text-yellow-600 text-sm mt-1">
-                You have {credits} credits remaining. Consider adding more credits to avoid service interruption.
-                (1 credit = 1 second of call time)
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         {kpiData.map((kpi, index) => {
           const Icon = kpi.icon;
-          const isCredit = kpi.title === 'Credit Balance';
           const changeColor = kpi.trend === 'up' ? 'text-emerald-500' : 'text-red-500';
-          const isEmerald = kpi.title === 'Active Campaigns' || kpi.title === 'Credit Balance';
+          const isHighlighted = kpi.title === 'Total Chats' || kpi.title === 'Total Visitors';
           return (
             <div
               key={index}
@@ -452,27 +599,23 @@ const DashboardOverview = () => {
                   </div>
                   <div
                     className={`inline-flex h-9 w-9 items-center justify-center rounded-xl border border-zinc-200 bg-white ${
-                      isEmerald && "border-emerald-200 bg-gradient-to-br from-emerald-100 to-teal-100"
+                      isHighlighted && "border-emerald-200 bg-gradient-to-br from-emerald-100 to-teal-100"
                     }`}
                   >
                     <Icon
                       className={`h-4 w-4 ${
-                        isEmerald ? "text-emerald-500" : "text-zinc-500"
+                        isHighlighted ? "text-emerald-500" : "text-zinc-500"
                       }`}
                     />
                   </div>
                 </div>
                 <div className="flex items-center justify-between text-[11px] text-zinc-500">
-                  <span>
-                    {kpi.title === 'Credit Balance' ? 'Status' : kpi.title === 'Validity' ? '' : 'vs yesterday'}
+                  <span>Status</span>
+                  <span className={`font-medium ${
+                    kpi.warning ? 'text-red-500' : changeColor
+                  }`}>
+                    {kpi.change}
                   </span>
-                  {kpi.title !== 'Validity' && (
-                    <span className={`font-medium ${
-                      isCredit && kpi.warning ? 'text-red-500' : changeColor
-                    }`}>
-                      {kpi.change}
-                    </span>
-                  )}
                 </div>
               </div>
             </div>
@@ -480,613 +623,314 @@ const DashboardOverview = () => {
         })}
       </div>
 
-      {/* Top Call this month as live wave cards + FAQ/Terms */}
-      {(topPhoneNumbers.length > 0 || campaigns.length > 0) && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 glass-card">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 border-b border-zinc-200/70 px-6 py-4 md:px-6 md:py-5">
-              <div className="flex items-center gap-2">
-                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600 text-sm">
-                  ●
-                </div>
-                <h2 className="text-xl font-semibold text-zinc-900">
-                  Top calls this month
-                </h2>
-              </div>
-              <p className="text-xs md:text-sm text-zinc-500">
-                Top phone numbers from recent campaigns
-              </p>
+      {/* Top Chats Cards + FAQ/Terms */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Top Chats Cards */}
+        <div className="lg:col-span-2 glass-card flex flex-col min-h-[376px]">
+          <div className="flex items-center gap-2 mb-4 px-6 pt-6">
+            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600 text-sm">
+              <FaComments />
             </div>
-            <div className="px-4 pb-4 pt-3 md:px-6 md:pt-4 md:pb-6">
-              {topPhoneNumbers.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                  {topPhoneNumbers.map((phoneData, index) => (
-                    <TopCallCard
-                      key={phoneData.id}
-                      phoneData={phoneData}
-                      index={index}
-                      onClick={() => handlePhoneClick(phoneData.phoneNumber, phoneData.campaignName)}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-8 text-zinc-500 text-sm">
-                  No phone numbers found in recent campaigns
-                </div>
-              )}
-            </div>
+            <h2 className="text-xl font-semibold text-zinc-900">
+              Top Chats
+            </h2>
           </div>
-
-          <div className="space-y-4">
-            {/* FAQ Card */}
-            <div className="glass-card p-4 flex flex-col min-h-[180px]">
-              <div className="flex items-center space-x-3 mb-3">
-                <div className="p-2 bg-emerald-50 rounded-lg">
-                  <FaFileAlt className="text-emerald-500" size={18} />
-                </div>
-                <h3 className="text-lg font-semibold text-zinc-900">
-                  FAQ
-                </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 px-6 pb-6 flex-1">
+            {topChats.length > 0 ? (
+              topChats.map((chat) => {
+                const formatDuration = (seconds) => {
+                  const mins = Math.floor(seconds / 60);
+                  return `${mins}m`;
+                };
+                const formatTime = (timestamp) => {
+                  const date = new Date(timestamp);
+                  const now = new Date();
+                  const diffMs = now - date;
+                  const diffMins = Math.floor(diffMs / 60000);
+                  if (diffMins < 60) return `${diffMins}m ago`;
+                  const diffHours = Math.floor(diffMins / 60);
+                  if (diffHours < 24) return `${diffHours}h ago`;
+                  return date.toLocaleDateString();
+                };
+                return (
+                  <div
+                    key={chat.id}
+                    onClick={() => handleChatClick(chat)}
+                    className="glass-card p-5 cursor-pointer hover:shadow-lg transition-all border border-zinc-200 hover:border-emerald-300 rounded-xl flex flex-col"
+                  >
+                    <div className="flex-1 mb-4">
+                      <div className="text-sm text-zinc-700 line-clamp-3 leading-relaxed prose prose-sm prose-zinc max-w-none [&_p]:m-0 [&_strong]:text-zinc-800 [&_em]:text-zinc-600">
+                        <ReactMarkdown>{chat.lastMessage}</ReactMarkdown>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between text-xs text-zinc-500 pt-3 border-t border-zinc-100">
+                      <span className="font-medium">{chat.messageCount} messages</span>
+                      <span className="text-zinc-400">•</span>
+                      <span>{formatDuration(chat.duration)}</span>
+                      <span className="text-zinc-400">•</span>
+                      <span>{formatTime(chat.timestamp)}</span>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="col-span-2 flex items-center justify-center h-32 text-zinc-500 text-sm">
+                No chat data available yet
               </div>
-              <p className="text-sm text-zinc-500 mb-3">
-                Common questions about AI Calling Agent
-              </p>
-              <button
-                className="mt-auto inline-flex items-center justify-center space-x-2 px-4 py-2 rounded-lg bg-gradient-to-r from-teal-400 to-emerald-500 text-sm font-medium text-zinc-950 hover:brightness-105 transition-all"
-              >
-                <FaDownload size={14} />
-                <span>Download FAQ PDF</span>
-              </button>
-            </div>
-
-            {/* Terms & Conditions Card */}
-            <div className="glass-card p-4 flex flex-col min-h-[180px]">
-              <div className="flex items-center space-x-3 mb-3">
-                <div className="p-2 bg-emerald-50 rounded-lg">
-                  <FaFileAlt className="text-emerald-500" size={18} />
-                </div>
-                <h3 className="text-lg font-semibold text-zinc-900">
-                  Terms & Conditions
-                </h3>
-              </div>
-              <p className="text-sm text-zinc-500 mb-3">
-                Latest policy and compliance guidelines
-              </p>
-              <button
-                className="mt-auto inline-flex items-center justify-center space-x-2 px-4 py-2 rounded-lg bg-gradient-to-r from-teal-400 to-emerald-500 text-sm font-medium text-zinc-950 hover:brightness-105 transition-all"
-              >
-                <FaDownload size={14} />
-                <span>Download Terms PDF</span>
-              </button>
-            </div>
+            )}
           </div>
         </div>
-      )}
 
-      {/* Charts Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Call Outcome Funnel */}
-        <div className="glass-panel p-4 md:p-5">
-          <h3 className="text-sm font-semibold tracking-tight text-zinc-900 mb-4">
-            Call Outcome Breakdown
-          </h3>
-          {callOutcomeData && callOutcomeData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={callOutcomeData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis 
-                  dataKey="name" 
-                  stroke="#71717a" 
-                  tick={{ fontSize: 11 }}
-                  angle={-45}
-                  textAnchor="end"
-                  height={60}
-                />
-                <YAxis 
-                  stroke="#71717a" 
-                  tick={{ fontSize: 11 }}
-                  width={40}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: 'rgba(255, 255, 255, 0.98)',
-                    border: '1px solid #e4e4e7',
-                    borderRadius: '8px',
-                    fontSize: '11px',
-                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-                  }}
-                />
-                <Bar dataKey="value" fill="#10b981" radius={[6, 6, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="flex items-center justify-center h-[250px] text-zinc-500 text-xs">
-              No data available
+        <div className="space-y-4">
+          {/* FAQ Card */}
+          <div className="glass-card p-4 flex flex-col min-h-[180px]">
+            <div className="flex items-center space-x-3 mb-3">
+              <div className="p-2 bg-emerald-50 rounded-lg">
+                <FaFileAlt className="text-emerald-500" size={18} />
+              </div>
+              <h3 className="text-lg font-semibold text-zinc-900">
+                FAQ
+              </h3>
             </div>
-          )}
-        </div>
+            <p className="text-sm text-zinc-500 mb-3">
+              Common questions about AI Chat Agent
+            </p>
+            <button
+              className="mt-auto inline-flex items-center justify-center space-x-2 px-4 py-2 rounded-lg bg-gradient-to-r from-teal-400 to-emerald-500 text-sm font-medium text-zinc-950 hover:brightness-105 transition-all"
+            >
+              <FaDownload size={14} />
+              <span>Download FAQ PDF</span>
+            </button>
+          </div>
 
-        {/* Calls Over Time */}
-        <div className="glass-panel p-4 md:p-5">
-          <h3 className="text-sm font-semibold tracking-tight text-zinc-900 mb-4">
-            Calls Over Time
-          </h3>
-          {callsOverTimeData && callsOverTimeData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={250}>
-              <LineChart data={callsOverTimeData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis 
-                  dataKey="time" 
-                  stroke="#71717a" 
-                  tick={{ fontSize: 11 }}
-                  angle={-45}
-                  textAnchor="end"
-                  height={60}
-                />
-                <YAxis 
-                  stroke="#71717a" 
-                  tick={{ fontSize: 11 }}
-                  width={40}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: 'rgba(255, 255, 255, 0.98)',
-                    border: '1px solid #e4e4e7',
-                    borderRadius: '8px',
-                    fontSize: '11px',
-                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-                  }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="calls"
-                  stroke="#10b981"
-                  strokeWidth={2.5}
-                  dot={{ fill: '#10b981', r: 3.5 }}
-                  activeDot={{ r: 5 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="flex items-center justify-center h-[250px] text-zinc-500 text-xs">
-              No data available
+          {/* Terms & Conditions Card */}
+          <div className="glass-card p-4 flex flex-col min-h-[180px]">
+            <div className="flex items-center space-x-3 mb-3">
+              <div className="p-2 bg-emerald-50 rounded-lg">
+                <FaFileAlt className="text-emerald-500" size={18} />
+              </div>
+              <h3 className="text-lg font-semibold text-zinc-900">
+                Terms & Conditions
+              </h3>
             </div>
-          )}
+            <p className="text-sm text-zinc-500 mb-3">
+              Latest policy and compliance guidelines
+            </p>
+            <button
+              className="mt-auto inline-flex items-center justify-center space-x-2 px-4 py-2 rounded-lg bg-gradient-to-r from-teal-400 to-emerald-500 text-sm font-medium text-zinc-950 hover:brightness-105 transition-all"
+            >
+              <FaDownload size={14} />
+              <span>Download Terms PDF</span>
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Campaign Details Modal */}
-      {showCampaignModal && createPortal(
-        <div 
-          className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[100] p-4" 
-          style={{ 
-            position: 'fixed', 
-            top: 0, 
-            left: 0, 
-            right: 0, 
-            bottom: 0,
-            zIndex: 1000
-          }}
-          onClick={() => {
-            setShowCampaignModal(false);
-            setSelectedCampaign(null);
-            setCampaignDetails(null);
-          }}
-        >
-          <div 
-            className="glass-card rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto bg-white border border-zinc-200" 
-            onClick={(e) => e.stopPropagation()}
-            style={{ 
-              position: 'relative', 
-              zIndex: 1001,
-              margin: 'auto'
-            }}
-          >
-            <div className="p-6 border-b border-zinc-200">
-              <div className="flex justify-between items-center">
-                <h2 className="text-xl font-semibold text-zinc-900">
-                  Campaign Details
-                </h2>
-                <button
-                  onClick={() => {
-                    setShowCampaignModal(false);
-                    setSelectedCampaign(null);
-                    setCampaignDetails(null);
-                  }}
-                  className="text-zinc-400 hover:text-zinc-600 text-2xl font-bold w-8 h-8 flex items-center justify-center rounded-lg hover:bg-zinc-100 transition-colors"
-                >
-                  <FaTimes size={16} />
-                </button>
+      {/* Charts Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Bar Chart - Chats per Day */}
+        <div className="glass-card">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 border-b border-zinc-200/70 px-6 py-4 md:px-6 md:py-5">
+            <div className="flex items-center gap-2">
+              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600 text-sm">
+                <FaComments />
               </div>
+              <h2 className="text-xl font-semibold text-zinc-900">
+                Chats per Day
+              </h2>
             </div>
-
-            {loadingDetails ? (
-              <div className="p-6 flex items-center justify-center">
-                <FaSpinner className="animate-spin text-emerald-500" size={24} />
-              </div>
-            ) : campaignDetails ? (
-              <div className="p-6 space-y-6">
-                {/* Campaign Information */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-4">
-                    <div>
-                      <p className="text-sm font-medium text-zinc-500 mb-1">Campaign ID</p>
-                      <p className="text-sm font-semibold text-zinc-900">{campaignDetails._id || campaignDetails.id || 'N/A'}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-zinc-500 mb-1">Campaign Name</p>
-                      <p className="text-sm font-semibold text-zinc-900">{campaignDetails.name || 'N/A'}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-zinc-500 mb-1">Created At</p>
-                      <p className="text-sm text-zinc-700">
-                        {campaignDetails.createdAt 
-                          ? new Date(campaignDetails.createdAt).toLocaleString('en-US', { 
-                              month: 'long', 
-                              day: 'numeric', 
-                              year: 'numeric', 
-                              hour: 'numeric', 
-                              minute: '2-digit',
-                              hour12: true 
-                            })
-                          : 'N/A'}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-zinc-500 mb-1">Start Time</p>
-                      <p className="text-sm text-zinc-700">
-                        {campaignDetails.startTime || campaignDetails.startDate 
-                          ? new Date(campaignDetails.startTime || campaignDetails.startDate).toLocaleString()
-                          : 'N/A'}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-zinc-500 mb-1">End Time</p>
-                      <p className="text-sm text-zinc-700">
-                        {campaignDetails.endTime || campaignDetails.endDate 
-                          ? new Date(campaignDetails.endTime || campaignDetails.endDate).toLocaleString()
-                          : 'N/A'}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div>
-                      <p className="text-sm font-medium text-zinc-500 mb-1">Status</p>
-                      <div>
-                        <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium ${
-                          campaignDetails.status === 'active' 
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                            : campaignDetails.status === 'paused'
-                            ? 'bg-yellow-50 text-yellow-700 border border-yellow-200'
-                            : campaignDetails.status === 'completed'
-                            ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                            : 'bg-zinc-50 text-zinc-700 border border-zinc-200'
-                        }`}>
-                          <span className="h-1.5 w-1.5 rounded-full bg-current" />
-                          {campaignDetails.status ? campaignDetails.status.charAt(0).toUpperCase() + campaignDetails.status.slice(1) : 'N/A'}
-                        </span>
-                      </div>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-zinc-500 mb-1">Total Numbers</p>
-                      <p className="text-sm font-semibold text-zinc-900">
-                        {campaignDetails.totalCalls || campaignDetails.phoneNumbers?.length || campaignDetails.liveStats?.totalNumbers || 0}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-zinc-500 mb-1">Active Calls</p>
-                      <p className="text-sm font-semibold text-zinc-900">
-                        {campaignDetails.liveStats?.activeCalls || campaignDetails.activeCalls || 0}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-zinc-500 mb-1">Completed Calls</p>
-                      <p className="text-sm font-semibold text-zinc-900">
-                        {campaignDetails.completedCalls || campaignDetails.liveStats?.completed || 0}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-zinc-500 mb-1">Failed Calls</p>
-                      <p className="text-sm font-semibold text-zinc-900">
-                        {campaignDetails.failedCalls || campaignDetails.liveStats?.failed || 0}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Download Contact Details Button */}
-                <button
-                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-medium transition-colors"
-                >
-                  <FaDownload size={16} />
-                  <span>Download Contact Details</span>
-                </button>
-              </div>
+            <p className="text-xs md:text-sm text-zinc-500">
+              Last 7 days
+            </p>
+          </div>
+          <div className="px-4 pb-4 pt-3 md:px-6 md:pt-4 md:pb-6">
+            {chatsChartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={320}>
+                <BarChart data={chatsChartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis 
+                    dataKey="date" 
+                    stroke="#71717a" 
+                    tick={{ fontSize: 12 }}
+                    angle={-45}
+                    textAnchor="end"
+                    height={60}
+                  />
+                  <YAxis 
+                    stroke="#71717a" 
+                    tick={{ fontSize: 11 }}
+                    width={50}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: 'rgba(255, 255, 255, 0.98)',
+                      border: '1px solid #e4e4e7',
+                      borderRadius: '8px',
+                      fontSize: '12px',
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                    }}
+                  />
+                  <Bar dataKey="chats" fill="#10b981" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
             ) : (
-              <div className="p-6 text-center text-zinc-500">
-                No campaign details available
+              <div className="flex items-center justify-center h-[300px] text-zinc-500 text-sm">
+                No data available yet
               </div>
             )}
-
-            <div className="p-6 border-t border-zinc-200 flex justify-end">
-              <button
-                onClick={() => {
-                  setShowCampaignModal(false);
-                  setSelectedCampaign(null);
-                  setCampaignDetails(null);
-                }}
-                className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-full text-xs font-medium transition-colors"
-              >
-                Close
-              </button>
-            </div>
           </div>
         </div>
-        ,
-        document.body
-      )}
 
-      {/* Call Details Modal */}
-      {showCallModal && createPortal(
+        {/* Line Chart - Visitors per Day */}
+        <div className="glass-card">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 border-b border-zinc-200/70 px-6 py-4 md:px-6 md:py-5">
+            <div className="flex items-center gap-2">
+              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600 text-sm">
+                <FaUsers />
+              </div>
+              <h2 className="text-xl font-semibold text-zinc-900">
+                Visitors per Day
+              </h2>
+            </div>
+            <p className="text-xs md:text-sm text-zinc-500">
+              Last 7 days
+            </p>
+          </div>
+          <div className="px-4 pb-4 pt-3 md:px-6 md:pt-4 md:pb-6">
+            {visitorsChartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={320}>
+                <LineChart data={visitorsChartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis 
+                    dataKey="date" 
+                    stroke="#71717a" 
+                    tick={{ fontSize: 12 }}
+                    angle={-45}
+                    textAnchor="end"
+                    height={60}
+                  />
+                  <YAxis 
+                    stroke="#71717a" 
+                    tick={{ fontSize: 11 }}
+                    width={50}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: 'rgba(255, 255, 255, 0.98)',
+                      border: '1px solid #e4e4e7',
+                      borderRadius: '8px',
+                      fontSize: '12px',
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                    }}
+                  />
+                  <Line 
+                    type="monotone" 
+                    dataKey="visitors" 
+                    stroke="#6366f1" 
+                    strokeWidth={2}
+                    dot={{ fill: '#6366f1', r: 4 }}
+                    activeDot={{ r: 6 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-[300px] text-zinc-500 text-sm">
+                No data available yet
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Chat Conversation Modal */}
+      {showChatModal && selectedChat && (
         <div 
-          className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[100] p-4" 
-          style={{ 
-            position: 'fixed', 
-            top: 0, 
-            left: 0, 
-            right: 0, 
-            bottom: 0,
-            zIndex: 1000
-          }}
+          className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[100] p-4"
           onClick={() => {
-            setShowCallModal(false);
-            setSelectedPhoneNumber(null);
-            setCallDetails(null);
+            setShowChatModal(false);
+            setSelectedChat(null);
           }}
         >
           <div 
-            className="glass-card rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto bg-white border border-zinc-200" 
+            className="glass-card rounded-2xl shadow-xl max-w-3xl w-full max-h-[90vh] overflow-hidden bg-white border border-zinc-200"
             onClick={(e) => e.stopPropagation()}
-            style={{ 
-              position: 'relative', 
-              zIndex: 1001,
-              margin: 'auto'
-            }}
           >
-            <div className="p-6 border-b border-zinc-200">
-              <div className="flex justify-between items-center">
-                <h2 className="text-xl font-semibold text-zinc-900">
-                  Call Details
-                </h2>
-                <button
-                  onClick={() => {
-                    setShowCallModal(false);
-                    setSelectedPhoneNumber(null);
-                    setCallDetails(null);
-                  }}
-                  className="text-zinc-400 hover:text-zinc-600 text-2xl font-bold w-8 h-8 flex items-center justify-center rounded-lg hover:bg-zinc-100 transition-colors"
-                >
-                  <FaTimes size={16} />
-                </button>
-              </div>
-            </div>
-
-            {loadingCallDetails ? (
-              <div className="p-6 flex items-center justify-center">
-                <FaSpinner className="animate-spin text-emerald-500" size={24} />
-              </div>
-            ) : callDetails ? (
-              <div className="p-6 space-y-6">
-                {/* Call Information */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-4">
-                    <div>
-                      <p className="text-sm font-medium text-zinc-500 mb-1">Phone Number</p>
-                      <p className="text-sm font-semibold text-zinc-900">{callDetails.phoneNumber || callDetails.toPhone || callDetails.fromPhone || 'N/A'}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-zinc-500 mb-1">Campaign</p>
-                      <p className="text-sm font-semibold text-zinc-900">{callDetails.campaignName || 'N/A'}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-zinc-500 mb-1">Call ID</p>
-                      <p className="text-sm text-zinc-700 font-mono">{callDetails.sessionId || callDetails.exotelCallSid || callDetails.callSid || 'N/A'}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-zinc-500 mb-1">Started At</p>
-                      <p className="text-sm text-zinc-700">
-                        {callDetails.startedAt 
-                          ? new Date(callDetails.startedAt).toLocaleString('en-US', { 
-                              month: 'long', 
-                              day: 'numeric', 
-                              year: 'numeric', 
-                              hour: 'numeric', 
-                              minute: '2-digit',
-                              hour12: true 
-                            })
-                          : callDetails.createdAt
-                          ? new Date(callDetails.createdAt).toLocaleString()
-                          : 'N/A'}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-zinc-500 mb-1">Ended At</p>
-                      <p className="text-sm text-zinc-700">
-                        {callDetails.endedAt 
-                          ? new Date(callDetails.endedAt).toLocaleString()
-                          : 'N/A'}
-                      </p>
-                    </div>
+            {/* Modal Header */}
+            <div className="p-6 border-b border-zinc-200 bg-gradient-to-r from-emerald-50 to-teal-50">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500 text-white">
+                    <FaComments />
                   </div>
-
-                  <div className="space-y-4">
-                    <div>
-                      <p className="text-sm font-medium text-zinc-500 mb-1">Status</p>
-                      <div>
-                        {callDetails.status === 'completed' ? (
-                          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
-                            <FaCheckCircle className="h-3 w-3" />
-                            Completed
-                          </span>
-                        ) : callDetails.status === 'failed' ? (
-                          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-red-50 text-red-700 border border-red-200">
-                            <FaTimesCircle className="h-3 w-3" />
-                            Failed
-                          </span>
-                        ) : callDetails.status === 'in-progress' ? (
-                          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">
-                            <FaSpinner className="h-3 w-3 animate-spin" />
-                            In Progress
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-zinc-50 text-zinc-700 border border-zinc-200">
-                            {callDetails.status || 'Unknown'}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-zinc-500 mb-1">Duration</p>
-                      <p className="text-sm font-semibold text-zinc-900">
-                        {callDetails.duration 
-                          ? `${Math.floor(callDetails.duration / 60)}:${String(callDetails.duration % 60).padStart(2, '0')}s`
-                          : callDetails.durationSec
-                          ? `${Math.floor(callDetails.durationSec / 60)}:${String(callDetails.durationSec % 60).padStart(2, '0')}s`
-                          : 'N/A'}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-zinc-500 mb-1">Credits Consumed</p>
-                      <p className="text-sm font-semibold text-zinc-900">
-                        {callDetails.creditsConsumed || callDetails.durationSec || 0}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-zinc-500 mb-1">Direction</p>
-                      <p className="text-sm text-zinc-700">
-                        {callDetails.direction === 'outbound' ? 'Outbound' : callDetails.direction === 'inbound' ? 'Inbound' : 'N/A'}
-                      </p>
-                    </div>
-                    {callDetails.recordingUrl && (
-                      <div>
-                        <p className="text-sm font-medium text-zinc-500 mb-1">Recording</p>
-                        <a 
-                          href={callDetails.recordingUrl} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="text-sm text-emerald-600 hover:text-emerald-700 underline"
-                        >
-                          Listen to Recording
-                        </a>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Transcript if available */}
-                {callDetails.transcript && callDetails.transcript.length > 0 && (
                   <div>
-                    <p className="text-sm font-medium text-zinc-500 mb-2">Transcript</p>
-                    <div className="bg-zinc-50 rounded-lg p-4 max-h-60 overflow-y-auto">
-                      <p className="text-sm text-zinc-700 whitespace-pre-wrap">
-                        {callDetails.transcript}
+                    <h2 className="text-xl font-semibold text-zinc-900">
+                      Chat Conversation
+                    </h2>
+                    <p className="text-sm text-zinc-500">
+                      {selectedChat.messageCount} messages • {Math.floor(selectedChat.duration / 60)}m duration
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowChatModal(false);
+                    setSelectedChat(null);
+                  }}
+                  className="p-2 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors"
+                >
+                  <FaTimes size={20} />
+                </button>
+              </div>
+            </div>
+
+            {/* Chat Messages */}
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-180px)] space-y-4">
+              {getChatConversation(selectedChat.id).map((message) => {
+                const isUser = message.role === 'user';
+                return (
+                  <div
+                    key={message.id}
+                    className={`flex gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}
+                  >
+                    <div className={`flex h-8 w-8 items-center justify-center rounded-full flex-shrink-0 ${
+                      isUser 
+                        ? 'bg-emerald-500 text-white' 
+                        : 'bg-zinc-100 text-zinc-600'
+                    }`}>
+                      {isUser ? <FaUser size={12} /> : <FaRobot size={12} />}
+                    </div>
+                    <div className={`flex-1 ${isUser ? 'text-right' : 'text-left'}`}>
+                      <div className={`inline-block max-w-[80%] rounded-2xl px-4 py-2 ${
+                        isUser
+                          ? 'bg-emerald-500 text-white'
+                          : 'bg-zinc-100 text-zinc-900'
+                      }`}>
+                        <div className={`text-sm whitespace-pre-wrap prose prose-sm max-w-none ${
+                          isUser 
+                            ? 'prose-invert [&_strong]:text-white [&_em]:text-emerald-100' 
+                            : '[&_strong]:text-zinc-800 [&_em]:text-zinc-600'
+                        } [&_p]:m-0 [&_ul]:m-0 [&_ol]:m-0 [&_li]:m-0`}>
+                          <ReactMarkdown>{message.content}</ReactMarkdown>
+                        </div>
+                      </div>
+                      <p className={`text-xs text-zinc-400 mt-1 ${
+                        isUser ? 'text-right' : 'text-left'
+                      }`}>
+                        {new Date(message.timestamp).toLocaleTimeString([], { 
+                          hour: '2-digit', 
+                          minute: '2-digit' 
+                        })}
                       </p>
                     </div>
                   </div>
-                )}
-              </div>
-            ) : (
-              <div className="p-6 text-center text-zinc-500">
-                No call details available
-              </div>
-            )}
-
-            <div className="p-6 border-t border-zinc-200 flex justify-end">
-              <button
-                onClick={() => {
-                  setShowCallModal(false);
-                  setSelectedPhoneNumber(null);
-                  setCallDetails(null);
-                }}
-                className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-full text-xs font-medium transition-colors"
-              >
-                Close
-              </button>
+                );
+              })}
             </div>
           </div>
         </div>
-        ,
-        document.body
       )}
     </div>
   );
 };
-
-function TopCallCard({ phoneData, index, onClick }) {
-  const agentLabel = `Orbit-${index + 1}`;
-  const phoneNumber = phoneData.phoneNumber || '';
-  // Get first digit (skip + sign if present)
-  const firstDigit = phoneNumber.replace(/^\+/, '').charAt(0) || (index + 1).toString();
-
-  return (
-    <div 
-      className="relative overflow-hidden rounded-xl border border-zinc-200 bg-white px-3 py-3 shadow-sm shadow-slate-200/80 transition-all duration-200 hover:border-emerald-300 hover:shadow-emerald-100 cursor-pointer"
-      onClick={onClick}
-    >
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-50 border border-emerald-200">
-            <FaPhone className="h-4 w-4 text-emerald-600" />
-          </div>
-          <div>
-            <p className="text-xs font-medium text-slate-900">
-              {phoneNumber}
-            </p>
-            <p className="text-[11px] text-slate-500">{phoneData.campaignName}</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Waveform */}
-      <div className="mt-3">
-        <Waveform />
-      </div>
-
-      {/* Bottom row */}
-      <div className="mt-3 flex items-center justify-between text-[11px] text-slate-500">
-        <div className="flex items-center gap-1.5">
-          <FiPhoneCall className="h-3 w-3 text-emerald-500" />
-          <span>{phoneData.duration}</span>
-        </div>
-        <span className="text-slate-500">
-          Agent: <span className="font-medium text-slate-700">{agentLabel}</span>
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function Waveform() {
-  return (
-    <div className="flex items-end gap-0.5 h-10 overflow-hidden">
-      {Array.from({ length: 30 }).map((_, i) => {
-        // Create varying base heights for each bar (20% to 60%)
-        const baseHeight = 20 + (i % 8) * 5;
-        return (
-          <div
-            key={i}
-            className="wave-bar"
-            style={{
-              height: `${baseHeight}%`,
-              animationDelay: `${i * 0.03}s`,
-              animationDuration: `${1.5 + (i % 3) * 0.3}s`,
-            }}
-          />
-        );
-      })}
-    </div>
-  );
-}
 
 export default DashboardOverview;

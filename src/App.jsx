@@ -16,9 +16,10 @@ import Campaigns from './components/Campaigns';
 
 import Analytics from './components/Analytics';
 
-import CallLogs from './components/CallLogs';
+import ChatHistory from './components/ChatHistory';
 import CallRecording from './components/CallRecording';
 import Leads from './components/Leads';
+import Customers from './components/Customers';
 import CallSummary from './components/CallSummary';
 import CallBacks from './components/CallBacks';
 import LiveStatus from './components/LiveStatus';
@@ -104,9 +105,11 @@ function App() {
 
             <Route path="/analytics" element={<Analytics />} />
 
-                    <Route path="/call-logs" element={<CallLogs />} />
+                    <Route path="/chat-history" element={<ChatHistory />} />
+                    <Route path="/call-logs" element={<Navigate to="/chat-history" replace />} />
             <Route path="/call-recording" element={<CallRecording />} />
             <Route path="/leads" element={<Leads />} />
+            <Route path="/customers" element={<Customers />} />
             <Route path="/call-summary" element={<CallSummary />} />
             <Route path="/call-backs" element={<CallBacks />} />
             <Route path="/live-status" element={<LiveStatus />} />

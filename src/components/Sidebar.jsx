@@ -25,7 +25,8 @@ import {
   FaMicrophone,
   FaUserFriends,
   FaChartBar,
-  FaRedo
+  FaRedo,
+  FaUsers
 } from 'react-icons/fa';
 
 
@@ -63,20 +64,30 @@ const Sidebar = ({ isOpen = false, onClose }) => {
   const menuItems = [
     { path: '/dashboard', icon: FaHome, label: 'Dashboard' },
     { path: '/leads', icon: FaUserFriends, label: 'Leads' },
-    { path: '/campaigns', icon: FaBullseye, label: 'Campaigns' },
+    { path: '/chat-history', icon: FaList, label: 'Chat History' },
     { path: '/call-backs', icon: FaRedo, label: 'Follow Up' },
-    { path: '/call-logs', icon: FaList, label: 'Call Logs' },
-    { path: '/call-recording', icon: FaMicrophone, label: 'Call Recording' },
+    { path: '/customers', icon: FaUsers, label: 'Customers' },
     { path: '/call-summary', icon: FaChartBar, label: 'Chat Summary' },
-    { path: '/live-status', icon: FaSignal, label: 'Live Status' },
     { path: '/analytics', icon: FaChartLine, label: 'Analytics' },
-    { path: '/delivery-reports', icon: FaFileAlt, label: 'Delivery Reports' },
     { path: '/credit-history', icon: FaFileDownload, label: 'Credit History' },
   ];
 
+  // Commented out menu items:
+  // { path: '/campaigns', icon: FaBullseye, label: 'Campaigns' },
+  // { path: '/call-recording', icon: FaMicrophone, label: 'Call Recording' },
+  // { path: '/live-status', icon: FaSignal, label: 'Live Status' },
+  // { path: '/delivery-reports', icon: FaFileAlt, label: 'Delivery Reports' },
 
 
-  const isActive = (path) => location.pathname === path;
+
+  const isActive = (path) => {
+    const currentPath = location.pathname;
+    // Handle redirect from old route
+    if (currentPath === '/call-logs' && path === '/chat-history') {
+      return true;
+    }
+    return currentPath === path;
+  };
 
 
 
@@ -132,12 +143,12 @@ const Sidebar = ({ isOpen = false, onClose }) => {
           />
           <div className="hidden lg:block">
             <div className="text-sm font-semibold tracking-tight text-zinc-900">Troika Tech AI</div>
-            <div className="text-xs text-zinc-500">AI Calling Agent</div>
+            <div className="text-xs text-zinc-500">AI Chat Agent</div>
           </div>
           {!collapsed && (
             <div className="lg:hidden">
               <div className="text-sm font-semibold tracking-tight text-zinc-900">Troika Tech AI</div>
-              <div className="text-xs text-zinc-500">AI Calling Agent</div>
+              <div className="text-xs text-zinc-500">AI Chat Agent</div>
             </div>
           )}
           {/* Close button for mobile */}

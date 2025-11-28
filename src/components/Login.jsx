@@ -42,7 +42,7 @@ const Login = () => {
         console.log('✅ Login successful');
         console.log('User:', response.data.user);
 
-        toast.success('Login successful! Redirecting...');
+        toast.success('Login successful!');
 
         // Navigate to dashboard
         navigate('/dashboard');
