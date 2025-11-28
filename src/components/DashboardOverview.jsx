@@ -328,12 +328,15 @@ const DashboardOverview = () => {
     if (!DEMO_MODE) {
       const chat = topChats.find(c => c.id === chatId);
       if (chat && chat.messages) {
-        return chat.messages.map((msg, idx) => ({
+        const messages = chat.messages.map((msg, idx) => ({
           id: `msg-${idx}`,
           role: msg.sender === 'bot' ? 'assistant' : 'user',
           content: msg.content || '',
           timestamp: msg.timestamp,
         }));
+        // Sort by timestamp ascending (oldest first)
+        messages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+        return messages;
       }
       return [];
     }
@@ -659,7 +662,7 @@ const DashboardOverview = () => {
                     className="glass-card p-5 cursor-pointer hover:shadow-lg transition-all border border-zinc-200 hover:border-emerald-300 rounded-xl flex flex-col"
                   >
                     <div className="flex-1 mb-4">
-                      <div className="text-sm text-zinc-700 line-clamp-3 leading-relaxed prose prose-sm prose-zinc max-w-none [&_p]:m-0 [&_strong]:text-zinc-800 [&_em]:text-zinc-600">
+                      <div className="text-sm text-zinc-700 line-clamp-3 leading-relaxed prose prose-sm prose-zinc max-w-none [&_p]:m-0 [&_strong]:text-zinc-700 [&_strong]:font-semibold [&_em]:text-zinc-600">
                         <ReactMarkdown>{chat.lastMessage}</ReactMarkdown>
                       </div>
                     </div>
@@ -908,7 +911,7 @@ const DashboardOverview = () => {
                         <div className={`text-sm whitespace-pre-wrap prose prose-sm max-w-none ${
                           isUser 
                             ? 'prose-invert [&_strong]:text-white [&_em]:text-emerald-100' 
-                            : '[&_strong]:text-zinc-800 [&_em]:text-zinc-600'
+                            : '[&_strong]:text-zinc-700 [&_strong]:font-semibold [&_em]:text-zinc-600'
                         } [&_p]:m-0 [&_ul]:m-0 [&_ol]:m-0 [&_li]:m-0`}>
                           <ReactMarkdown>{message.content}</ReactMarkdown>
                         </div>

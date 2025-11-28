@@ -1,49 +1,56 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { FaDownload, FaSearch, FaSyncAlt, FaArrowUp, FaArrowDown, FaCoins, FaSortUp, FaSortDown } from 'react-icons/fa';
-import { creditsAPI } from '../services/api';
+import { FaDownload, FaSearch, FaSyncAlt, FaArrowUp, FaArrowDown, FaCoins, FaSortUp, FaSortDown, FaChartLine, FaExternalLinkAlt, FaRobot, FaUserShield, FaGift, FaRedo, FaComments } from 'react-icons/fa';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
+import { authAPI } from '../services/api';
 
 const CreditHistory = () => {
   const [transactions, setTransactions] = useState([]);
-  const [currentBalance, setCurrentBalance] = useState(0);
+  const [summary, setSummary] = useState(null);
   const [search, setSearch] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
-  const [typeFilter, setTypeFilter] = useState('');
+  const [typeFilter, setTypeFilter] = useState('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [pagination, setPagination] = useState({ page: 1, limit: 50, total: 0, pages: 0 });
-  const [dateSortOrder, setDateSortOrder] = useState('desc'); // desc = newest first
+  const [dateSortOrder, setDateSortOrder] = useState('desc');
+  const [selectedSession, setSelectedSession] = useState(null);
+  const [sessionMessages, setSessionMessages] = useState([]);
+  const [sessionModalOpen, setSessionModalOpen] = useState(false);
+  const [sessionLoading, setSessionLoading] = useState(false);
 
-  const fetchTransactions = async () => {
+  const fetchData = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      // Fetch credit transactions (no userId needed - gets current user's data)
-      const options = {
-        limit: 1000, // Fetch all for client-side filtering
-        skip: 0,
-      };
+      // Fetch both summary and transactions in parallel
+      const [summaryRes, transactionsRes] = await Promise.all([
+        authAPI.getCreditSummary(),
+        authAPI.getCreditTransactions({
+          page: pagination.page,
+          limit: pagination.limit,
+          type: typeFilter,
+          startDate: dateFrom || undefined,
+          endDate: dateTo || undefined,
+        }),
+      ]);
 
-      if (dateFrom) {
-        options.startDate = new Date(dateFrom).toISOString();
-      }
-
-      if (dateTo) {
-        options.endDate = new Date(dateTo).toISOString();
-      }
-
-      const response = await creditsAPI.getTransactions(options);
-      setTransactions(response.data.transactions || []);
-      setCurrentBalance(response.data.currentBalance || 0);
+      setSummary(summaryRes.data);
+      setTransactions(transactionsRes.data.transactions || []);
+      setPagination(prev => ({
+        ...prev,
+        total: transactionsRes.data.total || 0,
+        pages: transactionsRes.data.totalPages || 0,
+      }));
       setLastUpdated(new Date());
     } catch (err) {
-      console.error('Error fetching credit transactions:', err);
+      console.error('Error fetching credit data:', err);
       if (err.code === 'ECONNREFUSED' || err.message?.includes('Network Error') || !err.response) {
         setError('Backend server is not running. Please start the server.');
       } else {
-        setError(err.response?.data?.message || err.message || 'Failed to load credit transactions');
+        setError(err.response?.data?.message || err.message || 'Failed to load credit history');
       }
     } finally {
       setLoading(false);
@@ -51,85 +58,58 @@ const CreditHistory = () => {
   };
 
   useEffect(() => {
-    fetchTransactions();
-  }, [dateFrom, dateTo]);
+    fetchData();
+  }, [pagination.page, typeFilter, dateFrom, dateTo]);
 
+  // Filter transactions by search (client-side)
   const filteredTransactions = useMemo(() => {
-    let filtered = transactions;
-
-    // Apply search filter
+    if (!search.trim()) return transactions;
+    
     const query = search.trim().toLowerCase();
-    if (query) {
-      filtered = filtered.filter((txn) => {
-        const reasonMatch = txn.reason?.toLowerCase().includes(query);
-        const idMatch = txn._id?.toLowerCase().includes(query);
-        return reasonMatch || idMatch;
-      });
-    }
+    return transactions.filter((txn) => {
+      const reasonMatch = txn.reason?.toLowerCase().includes(query);
+      const idMatch = txn.id?.toLowerCase().includes(query);
+      const sessionMatch = txn.session_id?.toLowerCase().includes(query);
+      return reasonMatch || idMatch || sessionMatch;
+    });
+  }, [transactions, search]);
 
-    // Apply type filter
-    if (typeFilter) {
-      filtered = filtered.filter((txn) => txn.type === typeFilter);
-    }
-
-    const sorted = [...filtered].sort((a, b) => {
-      const dateA = new Date(a.createdAt || 0).getTime();
-      const dateB = new Date(b.createdAt || 0).getTime();
+  // Sort transactions
+  const sortedTransactions = useMemo(() => {
+    return [...filteredTransactions].sort((a, b) => {
+      const dateA = new Date(a.created_at || 0).getTime();
+      const dateB = new Date(b.created_at || 0).getTime();
       return dateSortOrder === 'desc' ? dateB - dateA : dateA - dateB;
     });
-
-    return sorted;
-  }, [transactions, search, typeFilter, dateSortOrder]);
-
-  // Update pagination when filtered data changes
-  useEffect(() => {
-    const total = filteredTransactions.length;
-    const pages = Math.ceil(total / pagination.limit);
-    setPagination(prev => ({
-      ...prev,
-      total,
-      pages,
-      page: prev.page > pages && pages > 0 ? 1 : prev.page
-    }));
-  }, [filteredTransactions.length, pagination.limit]);
-
-  // Get paginated data
-  const paginatedTransactions = useMemo(() => {
-    const startIndex = (pagination.page - 1) * pagination.limit;
-    const endIndex = startIndex + pagination.limit;
-    return filteredTransactions.slice(startIndex, endIndex);
-  }, [filteredTransactions, pagination.page, pagination.limit]);
+  }, [filteredTransactions, dateSortOrder]);
 
   const buildCsv = (rows) => {
     return rows
       .map((row) =>
-        row
-          .map((cell) => {
-            if (cell === null || cell === undefined) return '""';
-            const safe = String(cell).replace(/"/g, '""');
-            return `"${safe}"`;
-          })
-          .join(',')
-      )
-      .join('\n');
+        row.map((cell) => {
+          if (cell === null || cell === undefined) return '""';
+          const safe = String(cell).replace(/"/g, '""');
+          return `"${safe}"`;
+        }).join(',')
+      ).join('\n');
   };
 
-  const downloadAllReports = () => {
-    if (filteredTransactions.length === 0) return;
+  const downloadCSV = () => {
+    if (sortedTransactions.length === 0) return;
 
     const rows = [
-      ['Date & Time', 'Type', 'Amount', 'Balance', 'Reason', 'Call Duration (sec)'],
+      ['Date & Time', 'Type', 'Amount', 'Balance After', 'Reason', 'Session ID', 'Admin'],
     ];
 
-    filteredTransactions.forEach((txn) => {
-      const callDuration = txn.metadata?.durationSec || '-';
+    sortedTransactions.forEach((txn) => {
       rows.push([
-        new Date(txn.createdAt).toLocaleString(),
-        txn.type.charAt(0).toUpperCase() + txn.type.slice(1),
+        new Date(txn.created_at).toLocaleString(),
+        getTypeLabel(txn.type),
         txn.amount,
-        txn.balance,
+        txn.balance_after,
         txn.reason,
-        callDuration,
+        txn.session_id || '-',
+        txn.admin?.name || '-',
       ]);
     });
 
@@ -144,44 +124,75 @@ const CreditHistory = () => {
   };
 
   const getTypeIcon = (type) => {
-    if (type === 'addition') {
-      return <FaArrowUp className="text-emerald-500" />;
-    } else {
-      return <FaArrowDown className="text-red-500" />;
+    switch (type) {
+      case 'message_deduction':
+        return <FaComments className="text-red-500" />;
+      case 'admin_add':
+        return <FaUserShield className="text-emerald-500" />;
+      case 'admin_remove':
+        return <FaUserShield className="text-red-500" />;
+      case 'reset':
+        return <FaRedo className="text-blue-500" />;
+      case 'renewal_bonus':
+        return <FaGift className="text-purple-500" />;
+      case 'initial_allocation':
+        return <FaRobot className="text-teal-500" />;
+      default:
+        return <FaCoins className="text-zinc-500" />;
     }
   };
 
-  const getTypeColor = (type) => {
-    if (type === 'addition') {
-      return 'text-emerald-600';
-    } else {
-      return 'text-red-600';
+  const getTypeLabel = (type) => {
+    switch (type) {
+      case 'message_deduction': return 'Message Usage';
+      case 'admin_add': return 'Admin Added';
+      case 'admin_remove': return 'Admin Removed';
+      case 'reset': return 'Reset';
+      case 'renewal_bonus': return 'Renewal Bonus';
+      case 'initial_allocation': return 'Initial Allocation';
+      default: return type;
     }
   };
 
-  const getTotalCreditsUsed = () => {
-    return filteredTransactions
-      .filter(txn => txn.type === 'deduction')
-      .reduce((sum, txn) => sum + Math.abs(txn.amount), 0);
+  const getTypeColor = (type, amount) => {
+    if (amount > 0) return 'text-emerald-600';
+    if (amount < 0) return 'text-red-600';
+    return 'text-zinc-600';
   };
 
-  const getTotalCreditsAdded = () => {
-    return filteredTransactions
-      .filter(txn => txn.type === 'addition')
-      .reduce((sum, txn) => sum + txn.amount, 0);
+  const handleSessionClick = async (sessionId) => {
+    if (!sessionId) return;
+    
+    try {
+      setSessionLoading(true);
+      setSelectedSession(sessionId);
+      setSessionModalOpen(true);
+      
+      const response = await authAPI.getMessages({ session_id: sessionId, limit: 100 });
+      setSessionMessages(response.data?.messages || []);
+    } catch (err) {
+      console.error('Error fetching session messages:', err);
+      setSessionMessages([]);
+    } finally {
+      setSessionLoading(false);
+    }
   };
+
+  // Calculate usage percentage
+  const usagePercentage = summary ? Math.round((summary.credits_used / (summary.credits_total || 1)) * 100) : 0;
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
         <div>
           <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs text-emerald-700 mb-3">
             <FaCoins className="h-3 w-3" />
-            <span>Credit management</span>
+            <span>Credit Management</span>
           </div>
           <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-zinc-900">Credit History</h1>
           <p className="text-sm text-zinc-500 mt-1">
-            View all credit transactions including calls and admin additions.
+            Track your credit usage, additions, and transaction history.
           </p>
           {lastUpdated && (
             <p className="text-xs text-zinc-400 mt-1">
@@ -191,89 +202,159 @@ const CreditHistory = () => {
         </div>
         <div className="flex items-center space-x-3 mt-6 sm:mt-4">
           <button
-            onClick={fetchTransactions}
+            onClick={fetchData}
             className="flex items-center justify-center space-x-2 px-4 py-2 rounded-full bg-white border border-zinc-200 text-zinc-700 hover:bg-zinc-50 transition-colors text-xs font-medium"
           >
             <FaSyncAlt className={loading ? 'animate-spin' : ''} />
             <span>{loading ? 'Refreshing...' : 'Refresh'}</span>
           </button>
           <button
-            onClick={downloadAllReports}
-            disabled={filteredTransactions.length === 0}
+            onClick={downloadCSV}
+            disabled={sortedTransactions.length === 0}
             className="flex items-center justify-center space-x-2 px-4 py-2 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-xs font-medium"
           >
             <FaDownload />
-            <span>Export</span>
+            <span>Export CSV</span>
           </button>
         </div>
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-        <div className="relative overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-[0_18px_35px_rgba(15,23,42,0.08)] kpi-gradient">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="relative overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-[0_18px_35px_rgba(15,23,42,0.08)]">
           <div className="relative p-4 flex flex-col gap-3">
-            <div className="flex items-center justify-between gap-3">
-              <div className="space-y-1">
-                <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-zinc-500">Current Balance</p>
-                <div className={`text-xl font-semibold tabular-nums ${currentBalance <= 0 ? 'text-red-600' : 'text-zinc-900'}`}>
-                  {currentBalance.toLocaleString()}
+            <div className="flex items-center justify-between gap-2">
+              <div className="space-y-1 min-w-0">
+                <p className="text-[10px] sm:text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500 truncate">Current Balance</p>
+                <div className={`text-lg sm:text-xl font-semibold tabular-nums ${(summary?.credits_remaining || 0) <= 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                  {(summary?.credits_remaining || 0).toLocaleString()}
                 </div>
-                <p className="text-[11px] text-zinc-500">
-                  {currentBalance <= 0 ? 'Out of credits' : `${Math.floor(currentBalance / 60)} minutes available`}
-                </p>
+                <p className="text-[10px] text-zinc-400 hidden sm:block">Available credits</p>
               </div>
-              <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-100 to-teal-100">
-                <FaCoins className="h-4 w-4 text-emerald-500" />
+              <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-teal-50 flex-shrink-0">
+                <FaCoins className="h-4 w-4 text-emerald-600" />
               </div>
             </div>
           </div>
         </div>
-        <div className="relative overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-[0_18px_35px_rgba(15,23,42,0.08)] kpi-gradient">
+
+        <div className="relative overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-[0_18px_35px_rgba(15,23,42,0.08)]">
           <div className="relative p-4 flex flex-col gap-3">
-            <div className="flex items-center justify-between gap-3">
-              <div className="space-y-1">
-                <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-zinc-500">Credits Used</p>
-                <div className="text-xl font-semibold tabular-nums text-zinc-900">
-                  {getTotalCreditsUsed().toLocaleString()}
+            <div className="flex items-center justify-between gap-2">
+              <div className="space-y-1 min-w-0">
+                <p className="text-[10px] sm:text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500 truncate">Total Allocated</p>
+                <div className="text-lg sm:text-xl font-semibold tabular-nums text-zinc-900">
+                  {(summary?.credits_total || 0).toLocaleString()}
                 </div>
-                <p className="text-[11px] text-zinc-500">
-                  {Math.floor(getTotalCreditsUsed() / 60)} minutes of calls
-                </p>
+                <p className="text-[10px] text-zinc-400 hidden sm:block">From plan & admin</p>
               </div>
-              <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-zinc-200 bg-white">
-                <FaArrowDown className="h-4 w-4 text-red-500" />
+              <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 flex-shrink-0">
+                <FaGift className="h-4 w-4 text-blue-600" />
               </div>
             </div>
           </div>
         </div>
-        <div className="relative overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-[0_18px_35px_rgba(15,23,42,0.08)] kpi-gradient">
+
+        <div className="relative overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-[0_18px_35px_rgba(15,23,42,0.08)]">
           <div className="relative p-4 flex flex-col gap-3">
-            <div className="flex items-center justify-between gap-3">
-              <div className="space-y-1">
-                <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-zinc-500">Credits Added</p>
-                <div className="text-xl font-semibold tabular-nums text-zinc-900">
-                  {getTotalCreditsAdded().toLocaleString()}
+            <div className="flex items-center justify-between gap-2">
+              <div className="space-y-1 min-w-0">
+                <p className="text-[10px] sm:text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500 truncate">Credits Used</p>
+                <div className="text-lg sm:text-xl font-semibold tabular-nums text-red-600">
+                  {(summary?.credits_used || 0).toLocaleString()}
                 </div>
-                <p className="text-[11px] text-zinc-500">
-                  {Math.floor(getTotalCreditsAdded() / 60)} minutes added
-                </p>
+                <p className="text-[10px] text-zinc-400 hidden sm:block">Total consumed</p>
               </div>
-              <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-zinc-200 bg-white">
-                <FaArrowUp className="h-4 w-4 text-blue-500" />
+              <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-red-200 bg-gradient-to-br from-red-50 to-orange-50 flex-shrink-0">
+                <FaArrowDown className="h-4 w-4 text-red-600" />
               </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="relative overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-[0_18px_35px_rgba(15,23,42,0.08)]">
+          <div className="relative p-4 flex flex-col gap-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="space-y-1 min-w-0">
+                <p className="text-[10px] sm:text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500 truncate">Usage</p>
+                <div className="text-lg sm:text-xl font-semibold tabular-nums text-purple-600">
+                  {usagePercentage}%
+                </div>
+                <p className="text-[10px] text-zinc-400 hidden sm:block">Of total credits</p>
+              </div>
+              <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-purple-200 bg-gradient-to-br from-purple-50 to-violet-50 flex-shrink-0">
+                <FaChartLine className="h-4 w-4 text-purple-600" />
+              </div>
+            </div>
+            {/* Progress bar */}
+            <div className="h-1.5 bg-zinc-100 rounded-full overflow-hidden">
+              <div 
+                className="h-full rounded-full bg-gradient-to-r from-purple-400 to-purple-600 transition-all duration-500"
+                style={{ width: `${Math.min(usagePercentage, 100)}%` }}
+              />
             </div>
           </div>
         </div>
       </div>
 
+      {/* Usage Trend Chart */}
+      {summary?.daily_usage && summary.daily_usage.length > 0 && (
+        <div className="glass-panel p-6 rounded-xl border border-zinc-200 bg-white shadow-sm">
+          <h3 className="text-sm font-semibold tracking-tight text-zinc-900 mb-4 flex items-center gap-2">
+            <FaChartLine className="text-emerald-500" />
+            Credit Usage Trend (Last 30 Days)
+          </h3>
+          <ResponsiveContainer width="100%" height={200}>
+            <AreaChart data={summary.daily_usage}>
+              <defs>
+                <linearGradient id="colorCredits" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                  <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" />
+              <XAxis 
+                dataKey="date" 
+                stroke="#71717a" 
+                tick={{ fontSize: 10 }}
+                tickFormatter={(value) => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+              />
+              <YAxis 
+                stroke="#71717a" 
+                tick={{ fontSize: 10 }}
+                allowDecimals={false}
+              />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                  border: '1px solid #e4e4e7',
+                  borderRadius: '8px',
+                  fontSize: '11px',
+                }}
+                labelFormatter={(value) => new Date(value).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+              />
+              <Area
+                type="monotone"
+                dataKey="credits_used"
+                stroke="#10b981"
+                strokeWidth={2}
+                fillOpacity={1}
+                fill="url(#colorCredits)"
+                name="Credits Used"
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
       {/* Filters */}
-      <div className="glass-panel p-4">
+      <div className="glass-panel p-4 rounded-xl border border-zinc-200 bg-white">
         <div className="flex flex-col md:flex-row gap-4">
           <div className="flex-1 relative">
             <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-zinc-400" />
             <input
               type="text"
-              placeholder="Search by reason or transaction ID..."
+              placeholder="Search by reason, ID, or session..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-10 pr-4 py-2 border border-zinc-200 rounded-lg bg-white text-zinc-900 focus:ring-2 focus:ring-emerald-500/60 focus:border-emerald-400 text-xs"
@@ -284,12 +365,18 @@ const CreditHistory = () => {
               <label className="text-xs text-zinc-600 whitespace-nowrap">Type:</label>
               <select
                 value={typeFilter}
-                onChange={(e) => setTypeFilter(e.target.value)}
+                onChange={(e) => {
+                  setTypeFilter(e.target.value);
+                  setPagination(prev => ({ ...prev, page: 1 }));
+                }}
                 className="w-full sm:w-auto px-3 py-2 border border-zinc-200 rounded-lg bg-white text-zinc-900 focus:ring-2 focus:ring-emerald-500/60 focus:border-emerald-400 text-xs"
               >
-                <option value="">All</option>
+                <option value="all">All</option>
                 <option value="addition">Additions</option>
                 <option value="deduction">Deductions</option>
+                <option value="message_deduction">Message Usage</option>
+                <option value="admin_add">Admin Added</option>
+                <option value="admin_remove">Admin Removed</option>
               </select>
             </div>
             <div className="flex items-center gap-2">
@@ -297,7 +384,10 @@ const CreditHistory = () => {
               <input
                 type="date"
                 value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
+                onChange={(e) => {
+                  setDateFrom(e.target.value);
+                  setPagination(prev => ({ ...prev, page: 1 }));
+                }}
                 className="w-full sm:w-auto px-3 py-2 border border-zinc-200 rounded-lg bg-white text-zinc-900 focus:ring-2 focus:ring-emerald-500/60 focus:border-emerald-400 text-xs"
               />
             </div>
@@ -306,7 +396,10 @@ const CreditHistory = () => {
               <input
                 type="date"
                 value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
+                onChange={(e) => {
+                  setDateTo(e.target.value);
+                  setPagination(prev => ({ ...prev, page: 1 }));
+                }}
                 className="w-full sm:w-auto px-3 py-2 border border-zinc-200 rounded-lg bg-white text-zinc-900 focus:ring-2 focus:ring-emerald-500/60 focus:border-emerald-400 text-xs"
               />
             </div>
@@ -315,15 +408,15 @@ const CreditHistory = () => {
       </div>
 
       {error && (
-        <div className="glass-card border-l-4 border-red-500/70 bg-red-50/80 p-4">
+        <div className="glass-card border-l-4 border-red-500/70 bg-red-50/80 p-4 rounded-xl">
           <p className="text-red-800 text-sm">{error}</p>
         </div>
       )}
 
       {/* Transactions Table */}
-      <div className="glass-panel overflow-hidden">
+      <div className="glass-panel overflow-hidden rounded-xl border border-zinc-200 bg-white">
         <div className="overflow-x-auto scrollbar-thin">
-          <table className="w-full min-w-[800px]">
+          <table className="w-full min-w-[900px]">
             <thead>
               <tr className="bg-gradient-to-r from-emerald-50/80 to-teal-50/80 border-b border-zinc-200">
                 <th className="px-4 py-3 text-left text-[11px] font-medium text-zinc-600 uppercase tracking-[0.16em] whitespace-nowrap">
@@ -341,60 +434,72 @@ const CreditHistory = () => {
                 </th>
                 <th className="px-4 py-3 text-left text-[11px] font-medium text-zinc-600 uppercase tracking-[0.16em] whitespace-nowrap">Type</th>
                 <th className="px-4 py-3 text-left text-[11px] font-medium text-zinc-600 uppercase tracking-[0.16em] whitespace-nowrap">Amount</th>
-                <th className="px-4 py-3 text-left text-[11px] font-medium text-zinc-600 uppercase tracking-[0.16em] whitespace-nowrap">Balance</th>
+                <th className="px-4 py-3 text-left text-[11px] font-medium text-zinc-600 uppercase tracking-[0.16em] whitespace-nowrap">Balance After</th>
                 <th className="px-4 py-3 text-left text-[11px] font-medium text-zinc-600 uppercase tracking-[0.16em] whitespace-nowrap">Reason</th>
-                <th className="px-4 py-3 text-left text-[11px] font-medium text-zinc-600 uppercase tracking-[0.16em] whitespace-nowrap">Duration</th>
+                <th className="px-4 py-3 text-left text-[11px] font-medium text-zinc-600 uppercase tracking-[0.16em] whitespace-nowrap">Session</th>
+                <th className="px-4 py-3 text-left text-[11px] font-medium text-zinc-600 uppercase tracking-[0.16em] whitespace-nowrap">Admin</th>
               </tr>
             </thead>
             <tbody>
               {loading && transactions.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className="px-4 py-8 text-center text-zinc-500 text-sm">
+                  <td colSpan="7" className="px-4 py-8 text-center text-zinc-500 text-sm">
                     Loading credit history...
                   </td>
                 </tr>
-              ) : filteredTransactions.length === 0 ? (
+              ) : sortedTransactions.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className="px-4 py-8 text-center text-zinc-500 text-sm">
+                  <td colSpan="7" className="px-4 py-8 text-center text-zinc-500 text-sm">
                     No transactions found.
                   </td>
                 </tr>
               ) : (
-                paginatedTransactions.map((txn) => (
-                  <tr key={txn._id} className="border-b border-zinc-100 last:border-0 hover:bg-zinc-50/50 transition-colors">
+                sortedTransactions.map((txn) => (
+                  <tr key={txn.id} className="border-b border-zinc-100 last:border-0 hover:bg-zinc-50/50 transition-colors">
                     <td className="px-4 py-3 text-xs text-zinc-700">
-                      {new Date(txn.createdAt).toLocaleString()}
+                      {new Date(txn.created_at).toLocaleString()}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         {getTypeIcon(txn.type)}
-                        <span className={`text-xs font-medium ${getTypeColor(txn.type)}`}>
-                          {txn.type.charAt(0).toUpperCase() + txn.type.slice(1)}
+                        <span className={`text-xs font-medium ${getTypeColor(txn.type, txn.amount)}`}>
+                          {getTypeLabel(txn.type)}
                         </span>
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`text-xs font-semibold ${getTypeColor(txn.type)}`}>
+                      <span className={`text-xs font-semibold ${getTypeColor(txn.type, txn.amount)}`}>
                         {txn.amount > 0 ? '+' : ''}{txn.amount}
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`text-xs font-semibold ${txn.balance <= 0 ? 'text-red-600' : 'text-zinc-700'}`}>
-                        {txn.balance}
+                      <span className={`text-xs font-semibold ${txn.balance_after <= 0 ? 'text-red-600' : 'text-zinc-700'}`}>
+                        {txn.balance_after?.toLocaleString()}
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <span className="text-xs text-zinc-600">
-                        {txn.reason.replace(/_/g, ' ')}
+                      <span className="text-xs text-zinc-600 max-w-[200px] truncate block" title={txn.reason}>
+                        {txn.reason || '-'}
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      {txn.metadata?.durationSec ? (
-                        <span className="text-xs text-zinc-600">
-                          {Math.floor(txn.metadata.durationSec / 60)}m {txn.metadata.durationSec % 60}s
-                        </span>
+                      {txn.session_id ? (
+                        <button
+                          onClick={() => handleSessionClick(txn.session_id)}
+                          className="text-xs text-emerald-600 hover:text-emerald-700 flex items-center gap-1 font-medium"
+                        >
+                          <span className="truncate max-w-[80px]">{txn.session_id.slice(-8)}</span>
+                          <FaExternalLinkAlt size={10} />
+                        </button>
                       ) : (
                         <span className="text-xs text-zinc-400">-</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {txn.admin ? (
+                        <span className="text-xs text-zinc-600">{txn.admin.name}</span>
+                      ) : (
+                        <span className="text-xs text-zinc-400">System</span>
                       )}
                     </td>
                   </tr>
@@ -403,6 +508,7 @@ const CreditHistory = () => {
             </tbody>
           </table>
         </div>
+        
         {/* Pagination */}
         {pagination.pages > 1 && (
           <div className="px-4 py-3 border-t border-zinc-200 flex flex-col sm:flex-row justify-between items-center gap-3 sm:gap-4">
@@ -445,6 +551,53 @@ const CreditHistory = () => {
           </div>
         )}
       </div>
+
+      {/* Session Modal */}
+      {sessionModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setSessionModalOpen(false)}>
+          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-4 border-b border-zinc-200 flex justify-between items-center">
+              <h3 className="text-lg font-semibold text-zinc-900">Session Messages</h3>
+              <button
+                onClick={() => setSessionModalOpen(false)}
+                className="text-zinc-400 hover:text-zinc-600 transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="px-6 py-4 max-h-[60vh] overflow-y-auto">
+              {sessionLoading ? (
+                <div className="text-center py-8 text-zinc-500">Loading messages...</div>
+              ) : sessionMessages.length === 0 ? (
+                <div className="text-center py-8 text-zinc-500">No messages found for this session.</div>
+              ) : (
+                <div className="space-y-3">
+                  {sessionMessages.map((msg, idx) => (
+                    <div
+                      key={idx}
+                      className={`p-3 rounded-lg ${
+                        msg.sender === 'bot' 
+                          ? 'bg-emerald-50 border border-emerald-100' 
+                          : 'bg-zinc-50 border border-zinc-100'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className={`text-xs font-medium ${msg.sender === 'bot' ? 'text-emerald-600' : 'text-zinc-600'}`}>
+                          {msg.sender === 'bot' ? 'AI Agent' : msg.contact_name || 'User'}
+                        </span>
+                        <span className="text-[10px] text-zinc-400">
+                          {new Date(msg.timestamp).toLocaleTimeString()}
+                        </span>
+                      </div>
+                      <p className="text-sm text-zinc-700 whitespace-pre-wrap">{msg.content}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

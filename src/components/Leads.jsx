@@ -11,7 +11,7 @@ const Leads = () => {
   const [pagination, setPagination] = useState({ page: 1, limit: 20, total: 0, pages: 0 });
   const [filters, setFilters] = useState({
     search: '',
-    dateRange: '30days',
+    dateRange: 'all',
   });
   const [dateSortOrder, setDateSortOrder] = useState('desc');
   const [showChatModal, setShowChatModal] = useState(false);

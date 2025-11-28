@@ -24,9 +24,9 @@ import {
   FaSignal,
   FaMicrophone,
   FaUserFriends,
-  FaChartBar,
   FaRedo,
-  FaUsers
+  FaUsers,
+  FaComments
 } from 'react-icons/fa';
 
 
@@ -65,9 +65,9 @@ const Sidebar = ({ isOpen = false, onClose }) => {
     { path: '/dashboard', icon: FaHome, label: 'Dashboard' },
     { path: '/leads', icon: FaUserFriends, label: 'Leads' },
     { path: '/chat-history', icon: FaList, label: 'Chat History' },
-    { path: '/call-backs', icon: FaRedo, label: 'Follow Up' },
+    { path: '/follow-up', icon: FaRedo, label: 'Follow Up' },
     { path: '/customers', icon: FaUsers, label: 'Customers' },
-    { path: '/call-summary', icon: FaChartBar, label: 'Chat Summary' },
+    { path: '/chat-summary', icon: FaComments, label: 'Chat Summary' },
     { path: '/analytics', icon: FaChartLine, label: 'Analytics' },
     { path: '/credit-history', icon: FaFileDownload, label: 'Credit History' },
   ];

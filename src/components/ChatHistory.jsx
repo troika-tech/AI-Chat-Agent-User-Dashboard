@@ -13,7 +13,7 @@ const ChatHistory = () => {
   const [filters, setFilters] = useState({
     sender: '',
     contact: '',
-    dateRange: '30days',
+    dateRange: 'all',
   });
   const [searchQuery, setSearchQuery] = useState('');
   
@@ -404,15 +404,15 @@ const ChatHistory = () => {
                   </button>
                   {allContacts.map(contact => (
                     <button
-                      key={contact}
+                      key={contact.phone || contact}
                       onClick={() => {
-                        setSelectedContact(contact);
+                        setSelectedContact(contact.phone || contact);
                         setPagination(prev => ({ ...prev, page: 1 }));
                         setContactFilterOpen(false);
                       }}
-                      className={`w-full text-left px-3 py-2 text-sm rounded-lg ${selectedContact === contact ? 'bg-emerald-50 text-emerald-700' : 'text-zinc-700 hover:bg-zinc-50'}`}
+                      className={`w-full text-left px-3 py-2 text-sm rounded-lg ${selectedContact === (contact.phone || contact) ? 'bg-emerald-50 text-emerald-700' : 'text-zinc-700 hover:bg-zinc-50'}`}
                     >
-                      {contact}
+                      {contact.phone || contact}
                     </button>
                   ))}
                 </div>

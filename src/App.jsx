@@ -20,8 +20,9 @@ import ChatHistory from './components/ChatHistory';
 import CallRecording from './components/CallRecording';
 import Leads from './components/Leads';
 import Customers from './components/Customers';
-import CallSummary from './components/CallSummary';
+import DailySummary from './components/DailySummary';
 import CallBacks from './components/CallBacks';
+import FollowUpLeads from './components/FollowUpLeads';
 import LiveStatus from './components/LiveStatus';
 import CreditHistory from './components/CreditHistory';
 import DeliveryReports from './components/DeliveryReport';
@@ -110,8 +111,9 @@ function App() {
             <Route path="/call-recording" element={<CallRecording />} />
             <Route path="/leads" element={<Leads />} />
             <Route path="/customers" element={<Customers />} />
-            <Route path="/call-summary" element={<CallSummary />} />
+            <Route path="/chat-summary" element={<DailySummary />} />
             <Route path="/call-backs" element={<CallBacks />} />
+            <Route path="/follow-up" element={<FollowUpLeads />} />
             <Route path="/live-status" element={<LiveStatus />} />
             <Route path="/credit-history" element={<CreditHistory />} />
             <Route path="/delivery-reports" element={<DeliveryReports />} />

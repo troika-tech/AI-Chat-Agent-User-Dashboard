@@ -306,6 +306,191 @@ export const authAPI = {
     const response = await api.get('/api/user/contacts');
     return response.data;
   },
+
+  // Get daily chat summaries - GET /api/user/daily-summaries
+  getDailySummaries: async (params = {}) => {
+    const { page = 1, limit = 30, startDate, endDate } = params;
+    if (DEMO_MODE) {
+      await mockDelay(300);
+      const mockSummaries = [];
+      const today = new Date();
+      for (let i = 0; i < 7; i++) {
+        const date = new Date(today);
+        date.setDate(date.getDate() - i);
+        mockSummaries.push({
+          _id: `summary-${i}`,
+          date: date.toISOString(),
+          summary: `On ${date.toLocaleDateString()}, users primarily discussed product pricing, feature inquiries, and support-related questions. There was significant interest in integration options and API documentation. Several users asked about subscription plans and payment methods.`,
+          messageCount: Math.floor(Math.random() * 200) + 50,
+          sessionCount: Math.floor(Math.random() * 30) + 10,
+          topTopics: ['pricing', 'features', 'support', 'integration'].slice(0, Math.floor(Math.random() * 3) + 2),
+        });
+      }
+      return {
+        success: true,
+        data: {
+          summaries: mockSummaries,
+          total: mockSummaries.length,
+          currentPage: 1,
+          totalPages: 1,
+        }
+      };
+    }
+    const response = await api.get('/api/user/daily-summaries', {
+      params: { page, limit, startDate, endDate }
+    });
+    return response.data;
+  },
+
+  // Get credit summary - GET /api/user/credit-summary
+  getCreditSummary: async () => {
+    if (DEMO_MODE) {
+      await mockDelay(200);
+      return {
+        success: true,
+        data: {
+          currentBalance: 95000,
+          totalAllocated: 100000,
+          totalUsed: 5000,
+          usagePercentage: 5,
+        }
+      };
+    }
+    const response = await api.get('/api/user/credit-summary');
+    return response.data;
+  },
+
+  // Get credit transactions - GET /api/user/credit-transactions
+  getCreditTransactions: async (params = {}) => {
+    const { page = 1, limit = 25, type, startDate, endDate, search } = params;
+    if (DEMO_MODE) {
+      await mockDelay(300);
+      const transactionTypes = ['message_deduction', 'admin_add', 'admin_remove', 'initial_allocation', 'renewal_bonus'];
+      const mockTransactions = [];
+      let balance = 95000;
+      
+      for (let i = 0; i < 50; i++) {
+        const txType = i === 0 ? 'initial_allocation' : transactionTypes[Math.floor(Math.random() * 4)];
+        let amount = txType === 'message_deduction' ? -2 : 
+                     txType === 'admin_add' ? Math.floor(Math.random() * 10000) + 1000 :
+                     txType === 'admin_remove' ? -(Math.floor(Math.random() * 5000) + 500) :
+                     txType === 'renewal_bonus' ? 10000 :
+                     100000;
+        
+        mockTransactions.push({
+          _id: `tx-${i}`,
+          type: txType,
+          amount: amount,
+          balance_after: balance,
+          session_id: txType === 'message_deduction' ? `session-${Math.floor(Math.random() * 100)}` : null,
+          reason: txType === 'message_deduction' ? 'Chat message exchange' :
+                  txType === 'admin_add' ? 'Admin credited for support' :
+                  txType === 'admin_remove' ? 'Adjustment by admin' :
+                  txType === 'renewal_bonus' ? 'Monthly renewal bonus' :
+                  'Initial subscription allocation',
+          admin_id: ['admin_add', 'admin_remove'].includes(txType) ? { name: 'Admin User', email: 'admin@example.com' } : null,
+          created_at: new Date(Date.now() - i * 3600000).toISOString(),
+        });
+        balance -= amount;
+      }
+      
+      const total = mockTransactions.length;
+      const startIdx = (page - 1) * limit;
+      const paginatedTransactions = mockTransactions.slice(startIdx, startIdx + limit);
+      
+      return {
+        success: true,
+        data: {
+          transactions: paginatedTransactions,
+          total: total,
+          currentPage: page,
+          totalPages: Math.ceil(total / limit),
+        }
+      };
+    }
+    const response = await api.get('/api/user/credit-transactions', {
+      params: { page, limit, type, startDate, endDate, search }
+    });
+    return response.data;
+  },
+
+  // Get follow-up leads (users who requested proposals, contact details, etc.) - GET /api/user/follow-up-leads
+  getFollowUpLeads: async (params = {}) => {
+    const { page = 1, limit = 20, searchTerm = '', dateRange = '30days', startDate, endDate, showContacted = 'all' } = params;
+    if (DEMO_MODE) {
+      await mockDelay(300);
+      const mockLeads = [
+        {
+          id: 'session-fu-1',
+          session_id: 'session-fu-1',
+          phone: '+91 98765 43210',
+          email: 'lead1@example.com',
+          name: 'Amit Patel',
+          matchedKeywords: ['send proposal', 'schedule meeting'],
+          messageSnippets: [
+            { content: 'Can you send me a proposal for the enterprise plan?', timestamp: new Date(Date.now() - 3600000).toISOString() },
+            { content: 'I would like to schedule a meeting with your team', timestamp: new Date(Date.now() - 3500000).toISOString() },
+          ],
+          matchCount: 2,
+          firstDetectedAt: new Date(Date.now() - 86400000).toISOString(),
+          lastDetectedAt: new Date(Date.now() - 3600000).toISOString(),
+          isContacted: false,
+          contactedAt: null,
+          notes: '',
+        },
+        {
+          id: 'session-fu-2',
+          session_id: 'session-fu-2',
+          phone: '+91 98765 43211',
+          email: 'lead2@example.com',
+          name: 'Sneha Gupta',
+          matchedKeywords: ['call me', 'contact details'],
+          messageSnippets: [
+            { content: 'Please call me to discuss further', timestamp: new Date(Date.now() - 7200000).toISOString() },
+          ],
+          matchCount: 2,
+          firstDetectedAt: new Date(Date.now() - 172800000).toISOString(),
+          lastDetectedAt: new Date(Date.now() - 7200000).toISOString(),
+          isContacted: true,
+          contactedAt: new Date(Date.now() - 3600000).toISOString(),
+          notes: 'Called and discussed requirements',
+        },
+      ];
+      return {
+        success: true,
+        data: {
+          leads: mockLeads,
+          keywords: ['send proposal', 'contact details', 'call me', 'schedule meeting', 'lets connect'],
+          total: mockLeads.length,
+          currentPage: 1,
+          totalPages: 1,
+        }
+      };
+    }
+    const response = await api.get('/api/user/follow-up-leads', {
+      params: { page, limit, searchTerm, dateRange, startDate, endDate, showContacted }
+    });
+    return response.data;
+  },
+
+  // Mark a follow-up lead as contacted - PATCH /api/user/follow-up-leads/:session_id/contacted
+  markFollowUpContacted: async (sessionId, isContacted, notes = '') => {
+    if (DEMO_MODE) {
+      await mockDelay(200);
+      return {
+        success: true,
+        data: {
+          success: true,
+          lead: { session_id: sessionId, is_contacted: isContacted, notes }
+        }
+      };
+    }
+    const response = await api.patch(`/api/user/follow-up-leads/${sessionId}/contacted`, {
+      is_contacted: isContacted,
+      notes
+    });
+    return response.data;
+  },
 };
 
 // Call APIs
