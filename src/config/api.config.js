@@ -20,7 +20,7 @@ const config = {
   // TOGGLE THIS VALUE TO SWITCH ENVIRONMENTS
   // ============================================
   // Options: 'local' | 'production'
-  environment: 'local',
+  environment: 'production',
 
   // ============================================
   // API BACKEND URLS

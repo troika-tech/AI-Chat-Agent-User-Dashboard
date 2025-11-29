@@ -1,21 +1,14 @@
 import React, { useState, useEffect } from 'react';
-
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-
 import { FaBars, FaPhone } from 'react-icons/fa';
-
 import Sidebar from './components/Sidebar';
-
 import UserMenu from './components/UserMenu';
 import Login from './components/Login';
 import DashboardOverview from './components/DashboardOverview';
-
 import Campaigns from './components/Campaigns';
-
 import Analytics from './components/Analytics';
-
 import ChatHistory from './components/ChatHistory';
 import CallRecording from './components/CallRecording';
 import Leads from './components/Leads';
