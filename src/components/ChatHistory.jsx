@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { FaSearch, FaFilter, FaChevronDown, FaEye, FaComments, FaUser, FaRobot, FaBrain, FaSpinner, FaEnvelope, FaCalendar, FaUsers } from 'react-icons/fa';
+import { FaSearch, FaFilter, FaChevronDown, FaEye, FaComments, FaUser, FaRobot, FaBrain, FaSpinner, FaEnvelope, FaCalendar, FaUsers, FaGlobe } from 'react-icons/fa';
 import ReactMarkdown from 'react-markdown';
 import { DEMO_MODE } from '../config/api.config';
 import { authAPI } from '../services/api';
@@ -234,6 +234,7 @@ const ChatHistory = () => {
           email: msg.email,
           name: msg.name,
           is_guest: msg.is_guest,
+          ip_address: msg.ip_address || null,
         }));
         
         setMessages(transformedMessages);
@@ -553,10 +554,16 @@ const ChatHistory = () => {
           <table className="w-full">
             <thead>
               <tr className="bg-gradient-to-r from-teal-600 to-cyan-600">
-                <th className="px-6 py-4 text-left">
+                {/* <th className="px-6 py-4 text-left">
                   <div className="flex items-center gap-2 text-white text-xs font-semibold uppercase tracking-wider">
                     <FaUser size={12} />
                     <span>Sender</span>
+                  </div>
+                </th> */}
+                                <th className="px-6 py-4 text-left">
+                  <div className="flex items-center gap-2 text-white text-xs font-semibold uppercase tracking-wider">
+                    <FaEnvelope size={12} />
+                    <span>Contact</span>
                   </div>
                 </th>
                 <th className="px-6 py-4 text-left">
@@ -565,16 +572,17 @@ const ChatHistory = () => {
                     <span>Message</span>
                   </div>
                 </th>
-                <th className="px-6 py-4 text-left">
-                  <div className="flex items-center gap-2 text-white text-xs font-semibold uppercase tracking-wider">
-                    <FaEnvelope size={12} />
-                    <span>Contact</span>
-                  </div>
-                </th>
+              
                 <th className="px-6 py-4 text-left">
                   <div className="flex items-center gap-2 text-white text-xs font-semibold uppercase tracking-wider">
                     <FaCalendar size={12} />
                     <span>Date</span>
+                  </div>
+                </th>
+                <th className="px-6 py-4 text-left">
+                  <div className="flex items-center gap-2 text-white text-xs font-semibold uppercase tracking-wider">
+                    <FaGlobe size={12} />
+                    <span>IP Address</span>
                   </div>
                 </th>
                 <th className="px-6 py-4 text-left">
@@ -588,7 +596,7 @@ const ChatHistory = () => {
             <tbody className="divide-y divide-zinc-100">
               {messages.length === 0 ? (
                 <tr>
-                  <td colSpan="5" className="px-6 py-12 text-center text-zinc-500 text-sm">
+                  <td colSpan="6" className="px-6 py-12 text-center text-zinc-500 text-sm">
                     <FaComments className="mx-auto mb-3 text-zinc-300" size={32} />
                     <p>{loading ? 'Loading messages...' : 'No messages found'}</p>
                   </td>
@@ -599,22 +607,12 @@ const ChatHistory = () => {
                   
                   return (
                     <tr key={message._id} className="hover:bg-zinc-50/50 transition-colors">
-                      {/* Sender */}
+                           {/* Contact */}
                       <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                            isAgent 
-                              ? 'bg-purple-100 text-purple-600' 
-                              : 'bg-emerald-100 text-emerald-600'
-                          }`}>
-                            {isAgent ? <FaBrain size={18} /> : <FaUser size={18} />}
-                          </div>
-                          <span className={`text-sm font-medium ${
-                            isAgent ? 'text-purple-700' : 'text-emerald-700'
-                          }`}>
-                            {isAgent ? 'agent' : 'user'}
-                          </span>
-                        </div>
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-cyan-50 text-cyan-700 text-xs font-medium border border-cyan-200">
+                          <FaUsers size={10} />
+                          {message.contact || message.guestId || 'Unknown'}
+                        </span>
                       </td>
                       
                       {/* Message */}
@@ -624,13 +622,7 @@ const ChatHistory = () => {
                         </p>
                       </td>
                       
-                      {/* Contact */}
-                      <td className="px-6 py-4">
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-cyan-50 text-cyan-700 text-xs font-medium border border-cyan-200">
-                          <FaUsers size={10} />
-                          {message.contact || message.guestId || 'Unknown'}
-                        </span>
-                      </td>
+           
                       
                       {/* Date */}
                       <td className="px-6 py-4">
@@ -638,7 +630,14 @@ const ChatHistory = () => {
                           {formatMessageDate(message.timestamp)}
                         </p>
                       </td>
-                      
+
+                      {/* IP Address */}
+                      <td className="px-6 py-4">
+                        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-zinc-100 text-zinc-600 text-xs font-mono">
+                          {message.ip_address || '-'}
+                        </span>
+                      </td>
+
                       {/* Action */}
                       <td className="px-6 py-4">
                         <button
