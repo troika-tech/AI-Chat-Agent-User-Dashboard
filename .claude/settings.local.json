@@ -1,7 +1,11 @@
 {
   "permissions": {
     "allow": [
-      "Bash(tree:*)"
+      "Bash(tree:*)",
+      "Bash(ssh:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm install:*)",
+      "Bash(scp:*)"
     ],
     "deny": [],
     "ask": []

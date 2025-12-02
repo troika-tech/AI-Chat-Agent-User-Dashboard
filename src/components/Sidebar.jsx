@@ -65,7 +65,7 @@ const Sidebar = ({ isOpen = false, onClose }) => {
     { path: '/dashboard', icon: FaHome, label: 'Dashboard' },
     { path: '/leads', icon: FaUserFriends, label: 'Leads' },
     { path: '/chat-history', icon: FaList, label: 'Chat History' },
-    { path: '/follow-up', icon: FaRedo, label: 'Leads Follow Up' },
+    { path: '/follow-up', icon: FaRedo, label: 'C\\M Request' },
     { path: '/customers', icon: FaUsers, label: 'Verified Customers' },
     { path: '/chat-summary', icon: FaComments, label: 'Chat Summary' },
     { path: '/analytics', icon: FaChartLine, label: 'Analytics' },
