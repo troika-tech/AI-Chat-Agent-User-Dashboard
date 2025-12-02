@@ -20,7 +20,8 @@ const config = {
   // TOGGLE THIS VALUE TO SWITCH ENVIRONMENTS
   // ============================================
   // Options: 'local' | 'production'
-  environment: 'production',
+  // For deployment, this will be set to 'production' automatically during build
+  environment: import.meta.env.MODE === 'production' ? 'production' : 'local',
 
   // ============================================
   // API BACKEND URLS
