@@ -8,7 +8,7 @@ const BACKEND_MODE = 'NEW'; // Change to 'NEW' for new backend, 'LOCALHOST' for 
 
 // API URLs
 const BACKEND_URLS = {
-  NEW: 'https://chat-apiv3.in',           // New backend (Chat-Agent-Backend-V3)
+  NEW: 'https://chat-apiv3.0804.in',           // New backend (Chat-Agent-Backend-V3)
   OLD: 'https://api.0804.in',      // Old backend (chatbot-backend-old on port 5001)
   LOCALHOST: 'http://localhost:5000'      // Local development (new backend)
 };
