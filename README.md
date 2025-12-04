@@ -60,9 +60,23 @@ frontend/
 └── package.json
 ```
 
-## 🔧 Configuration
+n## 🔧 Configuration
 
-The dashboard connects to the backend API at `http://localhost:3000` (configured in `vite.config.js`).
+### Backend Selection
+
+The dashboard supports three backend modes, configured in `src/config/api.config.js`:
+
+1. **OLD** (default): Uses the old backend at `https://chat-apiv3.0804.in`
+2. **NEW**: Uses the new backend at `https://chat-apiv3.in`
+3. **LOCALHOST**: Uses local development backend at `http://localhost:5000`
+
+To switch backends, edit `src/config/api.config.js` and change the `BACKEND_MODE` constant:
+
+```javascript
+const BACKEND_MODE = 'OLD'; // Change to 'NEW' or 'LOCALHOST'
+```
+
+**No environment variables needed!** All configuration is done in the config file.
 
 ## 🎯 Key Sections
 

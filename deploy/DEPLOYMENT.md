@@ -188,16 +188,21 @@ npm install
 npm run build
 ```
 
-## Environment Variables
+n## Backend Configuration
 
-If you need to set environment variables, create a `.env` file in the project root:
+Backend selection is configured directly in the source code at `src/config/api.config.js`.
+No environment variables are needed. Simply edit the `BACKEND_MODE` constant before building:
+
+```javascript
+const BACKEND_MODE = 'OLD'; // Change to 'NEW', 'OLD', or 'LOCALHOST'
+```
+
+After changing the backend mode, rebuild the application:
 
 ```bash
 cd /var/www/ai-calling-agent-dashboard
-nano .env
+npm run build
 ```
-
-Then update the build process if needed to use these variables.
 
 ## Monitoring
 

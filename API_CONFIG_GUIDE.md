@@ -8,66 +8,88 @@ All API configuration for the User Dashboard is now centralized in a single file
 
 ## Quick Start
 
-### Switching Between Environments
+### Switching Between Backends
 
-Open `src/config/api.config.js` and change the `environment` value:
+Open `src/config/api.config.js` and change the `BACKEND_MODE` value:
 
 ```javascript
-const config = {
-  environment: 'local',  // Change this to 'local' or 'production'
-  // ...
-};
+const BACKEND_MODE = 'OLD';  // Change this to 'NEW', 'OLD', or 'LOCALHOST'
 ```
 
 **Options:**
-- `'local'` - Use localhost backend (http://localhost:5000)
-- `'production'` - Use live backend (https://api.0804.in)
+- `'OLD'` (default) - Use old backend (https://chat-apiv3.0804.in)
+- `'NEW'` - Use new backend (https://chat-apiv3.in)
+- `'LOCALHOST'` - Use localhost backend (http://localhost:5000)
 
 ### Customizing URLs
 
 You can update the backend URLs in the same file:
 
 ```javascript
-urls: {
-  local: 'http://localhost:5000',      // Your local backend
-  production: 'https://api.0804.in',   // Your production backend
-}
-```
-
-### Demo Mode
-
-To test the UI without a running backend, enable demo mode:
-
-```javascript
-demoMode: true,  // Shows mock data
+const BACKEND_URLS = {
+  NEW: 'https://chat-apiv3.in',
+  OLD: 'https://chat-apiv3.0804.in',
+  LOCALHOST: 'http://localhost:5000'
+};
 ```
 
 ## What Changed?
 
 ### Before ❌
-- Environment variables scattered across multiple files
-- Had to use `.env` file
-- Hard to find and change API URLs
-- Used `import.meta.env.VITE_API_URL` everywhere
+- Environment variables via `.env` file
+- Used `process.env.REACT_APP_BACKEND_MODE`
+- Had to rebuild app to change backends
+- Required `.env.example` and `.env` files
 
 ### After ✅
 - Single centralized config file
-- Easy to toggle environments
+- Easy to toggle backends by editing one line
 - No `.env` file needed
-- Clear documentation
+- Built-in validation and error handling
+- Development mode logging for debugging
 
-## Files Updated
+## Configuration Details
 
-The following files were updated to use the new config:
+### The Config File
 
-1. ✅ `src/config/api.config.js` - Main config file (enhanced with docs)
-2. ✅ `src/components/AdminCreditManagement.jsx` - Removed env usage
-3. ✅ `src/components/Campaigns.jsx` - Removed env usage
-4. ✅ `src/components/LiveStatus.jsx` - Removed env usage
-5. ✅ `vite.config.js` - Removed define section
-6. ✅ `.env` - Deprecated (can be deleted)
+Location: `src/config/api.config.js`
 
-## How It Works
+```javascript
+// ============================================
+// BACKEND CONFIGURATION
+// ============================================
+const BACKEND_MODE = 'OLD'; // Change to 'NEW', 'OLD', or 'LOCALHOST'
+
+const BACKEND_URLS = {
+  NEW: 'https://chat-apiv3.in',
+  OLD: 'https://chat-apiv3.0804.in',
+  LOCALHOST: 'http://localhost:5000'
+};
+
+// ============================================
+// DO NOT MODIFY BELOW THIS LINE
+// ============================================
+```
+
+### How It Works
+
+1. **Validation** - The config validates the BACKEND_MODE on load
+2. **URL Selection** - Automatically selects the correct URL based on mode
+3. **Development Logging** - Shows current configuration in console (dev mode only)
+4. **Exports** - Provides clean exports for use throughout the app
+
+### Exported Values
+
+```javascript
+import { 
+  API_BASE_URL,           // The selected backend URL
+  CURRENT_BACKEND_MODE,   // Current mode ('NEW', 'OLD', or 'LOCALHOST')
+  BACKEND_URLS,           // All available URLs
+  DEMO_MODE               // Always false (kept for compatibility)
+} from './config/api.config';
+```
+
+## Usage in Components
 
 ### 1. Import the Config
 
@@ -78,62 +100,162 @@ import { API_BASE_URL } from '../config/api.config';
 ### 2. Use the Base URL
 
 ```javascript
-const response = await fetch(`${API_BASE_URL}/api/v1/users`);
+const response = await fetch(`${API_BASE_URL}/api/user/analytics`);
 ```
 
-### 3. Console Logging
+### 3. Console Logging (Development Only)
 
-When the app loads, you'll see:
+When the app loads in development mode, you'll see:
 
 ```
-🔧 API Configuration Loaded
-  Environment: local
-  Base URL: http://localhost:5000
-  Demo Mode: OFF (Real Backend)
-  💡 To change: Edit src/config/api.config.js
+============================================================
+🔧 API Configuration
+============================================================
+Backend Mode: OLD
+API Base URL: https://chat-apiv3.0804.in
+============================================================
 ```
 
 ## Best Practices
 
 1. **Never hardcode URLs** - Always use `API_BASE_URL`
-2. **Check the console** - Verify the correct URL is loaded on startup
-3. **Use demo mode** - Great for UI development without backend
-4. **Update both URLs** - Keep local and production URLs current
+2. **Check the console** - Verify the correct URL is loaded on startup (dev mode)
+3. **Update URLs in one place** - All URLs defined in `api.config.js`
+4. **Test before deploying** - Switch to target backend and test locally
+
+## Deployment
+
+### For Production (New Backend)
+
+1. Open `src/config/api.config.js`
+2. Change line 6:
+   ```javascript
+   const BACKEND_MODE = 'NEW';
+   ```
+3. Build the app:
+   ```bash
+   npm run build
+   ```
+4. Deploy the `dist` folder
+
+### For Production (Old Backend)
+
+1. Keep the default configuration:
+   ```javascript
+   const BACKEND_MODE = 'OLD';
+   ```
+2. Build and deploy as normal
+
+### For Local Testing
+
+1. Change to localhost mode:
+   ```javascript
+   const BACKEND_MODE = 'LOCALHOST';
+   ```
+2. Start the dev server:
+   ```bash
+   npm run dev
+   ```
 
 ## Troubleshooting
 
 ### Issue: API calls failing
 
-**Solution:** Check that `environment` in `api.config.js` matches your setup:
-- Using local backend? Set to `'local'`
-- Using production? Set to `'production'`
+**Solution:** Check that `BACKEND_MODE` in `api.config.js` matches your setup:
+- Using new backend? Set to `'NEW'`
+- Using old backend? Set to `'OLD'`
+- Testing locally? Set to `'LOCALHOST'`
 
 ### Issue: Wrong URL being used
 
-**Solution:** Check the console logs on app startup to see which URL is active
+**Solution:** 
+1. Check the console logs on app startup (development mode)
+2. Verify `BACKEND_MODE` value in `api.config.js`
+3. Restart the dev server after making changes
 
-### Issue: Still seeing .env errors
+### Issue: Invalid BACKEND_MODE error
 
-**Solution:** You can safely delete the `.env` file - it's no longer used
+**Solution:** 
+- The `BACKEND_MODE` must be exactly `'NEW'`, `'OLD'`, or `'LOCALHOST'`
+- Check for typos or extra spaces
+- Value is case-sensitive
 
-## Migration Notes
+## Migration from Environment Variables
 
-If you're coming from the old setup:
+If you're migrating from the old `.env` setup:
 
-1. ❌ **Don't use** `import.meta.env.VITE_API_URL` anymore
-2. ❌ **Don't edit** `.env` file
-3. ✅ **Do use** `import { API_BASE_URL } from '../config/api.config'`
-4. ✅ **Do edit** `src/config/api.config.js`
+1. ❌ **Don't use** `process.env.REACT_APP_*` anymore
+2. ❌ **Don't create** `.env` or `.env.example` files
+3. ❌ **Don't use** `import.meta.env.*` (except NODE_ENV)
+4. ✅ **Do use** `import { API_BASE_URL } from '../config/api.config'`
+5. ✅ **Do edit** `src/config/api.config.js` directly
+
+### What to Delete
+
+You can safely delete these files if they exist:
+- `.env`
+- `.env.example`
+- `.env.local`
+- `.env.production`
+
+## Advanced Configuration
+
+### Adding a New Backend
+
+1. Open `src/config/api.config.js`
+2. Add your URL to the `BACKEND_URLS` object:
+   ```javascript
+   const BACKEND_URLS = {
+     NEW: 'https://chat-apiv3.in',
+     OLD: 'https://chat-apiv3.0804.in',
+     LOCALHOST: 'http://localhost:5000',
+     STAGING: 'https://staging.chat-apiv3.in'  // New!
+   };
+   ```
+3. Update the `BACKEND_MODE` to use it:
+   ```javascript
+   const BACKEND_MODE = 'STAGING';
+   ```
+
+### Conditional Configuration
+
+The config automatically handles:
+- ✅ Invalid mode detection with error messages
+- ✅ Development-only console logging
+- ✅ Type-safe exports
+
+## Security Notes
+
+- ✅ No sensitive data in environment variables
+- ✅ No `.env` files to accidentally commit
+- ✅ Easy to audit backend URLs in one file
+- ✅ Built-in validation prevents typos
 
 ## Need Help?
 
-If you need to add a new backend URL or environment:
+Common tasks:
 
-1. Open `src/config/api.config.js`
-2. Add your new URL to the `urls` object
-3. Update the `environment` value or add a new option
-4. Follow the existing pattern
+**Switch to new backend:**
+```javascript
+const BACKEND_MODE = 'NEW';
+```
+
+**Switch to old backend:**
+```javascript
+const BACKEND_MODE = 'OLD';
+```
+
+**Test locally:**
+```javascript
+const BACKEND_MODE = 'LOCALHOST';
+```
+
+**Add custom URL:**
+1. Add to `BACKEND_URLS`
+2. Update `BACKEND_MODE`
+3. Restart dev server
 
 ---
 
-**Last Updated:** November 28, 2025
+**Last Updated:** December 4, 2025
+**No Environment Variables Required** ✅

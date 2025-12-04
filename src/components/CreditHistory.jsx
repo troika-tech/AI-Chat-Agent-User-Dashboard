@@ -178,8 +178,8 @@ const CreditHistory = () => {
     }
   };
 
-  // Calculate usage percentage
-  const usagePercentage = summary ? Math.round((summary.credits_used / (summary.credits_total || 1)) * 100) : 0;
+  // Calculate usage percentage - use backend value if available, otherwise calculate
+  const usagePercentage = summary?.usagePercentage ?? (summary ? Math.round((summary.totalUsed / (summary.totalAllocated || 1)) * 100) : 0);
 
   return (
     <div className="space-y-6">
@@ -226,10 +226,10 @@ const CreditHistory = () => {
             <div className="flex items-center justify-between gap-2">
               <div className="space-y-1 min-w-0">
                 <p className="text-[10px] sm:text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500 truncate">Current Balance</p>
-                <div className={`text-lg sm:text-xl font-semibold tabular-nums ${(summary?.credits_remaining || 0) <= 0 ? 'text-red-600' : 'text-emerald-600'}`}>
-                  {(summary?.credits_remaining || 0).toLocaleString()}
+                <div className={`text-lg sm:text-xl font-semibold tabular-nums ${summary?.currentBalance === null ? 'text-emerald-600' : (summary?.currentBalance || 0) <= 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                  {summary?.currentBalance === null ? '∞ Unlimited' : (summary?.currentBalance || 0).toLocaleString()}
                 </div>
-                <p className="text-[10px] text-zinc-400 hidden sm:block">Available credits</p>
+                <p className="text-[10px] text-zinc-400 hidden sm:block">{summary?.subscriptionType === 'unlimited' ? 'Unlimited plan' : 'Available credits'}</p>
               </div>
               <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-teal-50 flex-shrink-0">
                 <FaCoins className="h-4 w-4 text-emerald-600" />
@@ -244,9 +244,9 @@ const CreditHistory = () => {
               <div className="space-y-1 min-w-0">
                 <p className="text-[10px] sm:text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500 truncate">Total Allocated</p>
                 <div className="text-lg sm:text-xl font-semibold tabular-nums text-zinc-900">
-                  {(summary?.credits_total || 0).toLocaleString()}
+                  {summary?.totalAllocated === null ? '∞ Unlimited' : (summary?.totalAllocated || 0).toLocaleString()}
                 </div>
-                <p className="text-[10px] text-zinc-400 hidden sm:block">From plan & admin</p>
+                <p className="text-[10px] text-zinc-400 hidden sm:block">{summary?.subscriptionType === 'unlimited' ? 'No limit' : 'From plan & admin'}</p>
               </div>
               <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 flex-shrink-0">
                 <FaGift className="h-4 w-4 text-blue-600" />
@@ -259,11 +259,11 @@ const CreditHistory = () => {
           <div className="relative p-4 flex flex-col gap-3">
             <div className="flex items-center justify-between gap-2">
               <div className="space-y-1 min-w-0">
-                <p className="text-[10px] sm:text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500 truncate">Credits Used</p>
-                <div className="text-lg sm:text-xl font-semibold tabular-nums text-red-600">
-                  {(summary?.credits_used || 0).toLocaleString()}
+                <p className="text-[10px] sm:text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500 truncate">{summary?.subscriptionType === 'unlimited' || summary?.subscriptionType === 'time' ? 'Messages Used' : 'Credits Used'}</p>
+                <div className="text-lg sm:text-xl font-semibold tabular-nums text-orange-600">
+                  {(summary?.totalUsed || 0).toLocaleString()}
                 </div>
-                <p className="text-[10px] text-zinc-400 hidden sm:block">Total consumed</p>
+                <p className="text-[10px] text-zinc-400 hidden sm:block">{summary?.subscriptionType === 'unlimited' || summary?.subscriptionType === 'time' ? 'Total messages' : 'Total consumed'}</p>
               </div>
               <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-red-200 bg-gradient-to-br from-red-50 to-orange-50 flex-shrink-0">
                 <FaArrowDown className="h-4 w-4 text-red-600" />
@@ -276,23 +276,29 @@ const CreditHistory = () => {
           <div className="relative p-4 flex flex-col gap-3">
             <div className="flex items-center justify-between gap-2">
               <div className="space-y-1 min-w-0">
-                <p className="text-[10px] sm:text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500 truncate">Usage</p>
+                <p className="text-[10px] sm:text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500 truncate">
+                  {summary?.subscriptionType === 'unlimited' || summary?.subscriptionType === 'time' ? 'Plan Status' : 'Usage'}
+                </p>
                 <div className="text-lg sm:text-xl font-semibold tabular-nums text-purple-600">
-                  {usagePercentage}%
+                  {summary?.subscriptionType === 'unlimited' || summary?.subscriptionType === 'time' ? 'Active' : `${usagePercentage}%`}
                 </div>
-                <p className="text-[10px] text-zinc-400 hidden sm:block">Of total credits</p>
+                <p className="text-[10px] text-zinc-400 hidden sm:block">
+                  {summary?.subscriptionType === 'unlimited' ? 'Unlimited plan' : summary?.subscriptionType === 'time' ? 'Time-based plan' : 'Of total credits'}
+                </p>
               </div>
               <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-purple-200 bg-gradient-to-br from-purple-50 to-violet-50 flex-shrink-0">
                 <FaChartLine className="h-4 w-4 text-purple-600" />
               </div>
             </div>
-            {/* Progress bar */}
-            <div className="h-1.5 bg-zinc-100 rounded-full overflow-hidden">
-              <div 
-                className="h-full rounded-full bg-gradient-to-r from-purple-400 to-purple-600 transition-all duration-500"
-                style={{ width: `${Math.min(usagePercentage, 100)}%` }}
-              />
-            </div>
+            {/* Progress bar - only show for credits-based plans */}
+            {summary?.subscriptionType !== 'unlimited' && summary?.subscriptionType !== 'time' && (
+              <div className="h-1.5 bg-zinc-100 rounded-full overflow-hidden">
+                <div 
+                  className="h-full rounded-full bg-gradient-to-r from-purple-400 to-purple-600 transition-all duration-500"
+                  style={{ width: `${Math.min(usagePercentage, 100)}%` }}
+                />
+              </div>
+            )}
           </div>
         </div>
       </div>

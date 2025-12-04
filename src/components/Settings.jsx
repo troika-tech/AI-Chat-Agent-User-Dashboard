@@ -38,9 +38,10 @@ const Settings = () => {
   };
 
   // Calculate values from API data
-  const creditsTotal = creditSummary?.credits_total || plan?.credits_total || 0;
-  const creditsUsed = creditSummary?.credits_used || plan?.credits_used || 0;
-  const creditsRemaining = creditSummary?.credits_remaining || plan?.credits_remaining || plan?.tokens || 0;
+  // Backend returns: totalAllocated, totalUsed, currentBalance, subscriptionType
+  const creditsTotal = creditSummary?.totalAllocated || creditSummary?.credits_total || plan?.credits_total || 0;
+  const creditsUsed = creditSummary?.totalUsed || creditSummary?.credits_used || plan?.credits_used || 0;
+  const creditsRemaining = creditSummary?.currentBalance || creditSummary?.credits_remaining || plan?.credits_remaining || plan?.tokens || 0;
   const creditUsagePercentage = creditsTotal > 0 ? (creditsUsed / creditsTotal) * 100 : 0;
 
   // Plan data

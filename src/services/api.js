@@ -234,6 +234,25 @@ export const authAPI = {
     return response.data;
   },
 
+  // Mark a hot lead as contacted - PATCH /api/user/hot-leads/:session_id/contacted
+  markHotLeadContacted: async (sessionId, isContacted, notes = '') => {
+    if (DEMO_MODE) {
+      await mockDelay(200);
+      return {
+        success: true,
+        data: {
+          success: true,
+          lead: { session_id: sessionId, is_contacted: isContacted, notes }
+        }
+      };
+    }
+    const response = await api.patch(`/api/user/hot-leads/${sessionId}/contacted`, {
+      is_contacted: isContacted,
+      notes
+    });
+    return response.data;
+  },
+
   // Get messages (chat history) - GET /api/user/messages
   getMessages: async (params = {}) => {
     const { page = 1, limit = 25, email, phone, session_id, is_guest, dateRange, startDate, endDate, search } = params;

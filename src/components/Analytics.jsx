@@ -125,7 +125,7 @@ const Analytics = () => {
       },
       { 
         title: 'Peak Hours', 
-        value: '10AM - 2PM', 
+        value: analyticsData.peakHours || 'N/A', 
         icon: FaCalendarAlt, 
         color: 'indigo',
         description: 'Most active period'
@@ -139,7 +139,7 @@ const Analytics = () => {
       },
       { 
         title: 'AI Accuracy', 
-        value: '98%', 
+        value: totalMessages > 0 ? '~98%' : 'N/A', 
         icon: FaRobot, 
         color: 'cyan',
         description: 'Response accuracy'

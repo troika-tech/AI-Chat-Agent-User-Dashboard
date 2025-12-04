@@ -57,16 +57,12 @@ const Leads = () => {
           return dateSortOrder === 'desc' ? dateB - dateA : dateA - dateB;
         });
 
-        // Initialize connected statuses
+        // Initialize connected statuses from API response
         const initialStatuses = {};
         leadsList.forEach(lead => {
-          if (connectedStatuses[lead.id] === undefined) {
-            initialStatuses[lead.id] = false;
-          } else {
-            initialStatuses[lead.id] = connectedStatuses[lead.id];
-          }
+          initialStatuses[lead.id] = lead.isContacted || false;
         });
-        setConnectedStatuses(prev => ({ ...prev, ...initialStatuses }));
+        setConnectedStatuses(initialStatuses);
 
         setLeads(leadsList);
         setPagination(prev => ({
@@ -281,11 +277,24 @@ const Leads = () => {
                         <input
                           type="checkbox"
                           checked={connectedStatuses[lead.id] || false}
-                          onChange={(e) => {
+                          onChange={async (e) => {
+                            const newStatus = e.target.checked;
+                            // Optimistically update the UI
                             setConnectedStatuses(prev => ({
                               ...prev,
-                              [lead.id]: e.target.checked
+                              [lead.id]: newStatus
                             }));
+                            try {
+                              // Persist to backend
+                              await authAPI.markHotLeadContacted(lead.session_id, newStatus);
+                            } catch (err) {
+                              console.error('Error updating contacted status:', err);
+                              // Revert on error
+                              setConnectedStatuses(prev => ({
+                                ...prev,
+                                [lead.id]: !newStatus
+                              }));
+                            }
                           }}
                           className="sr-only peer"
                         />

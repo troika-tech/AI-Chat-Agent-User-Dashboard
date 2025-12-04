@@ -5,7 +5,9 @@
       "Bash(ssh:*)",
       "Bash(npm run build:*)",
       "Bash(npm install:*)",
-      "Bash(scp:*)"
+      "Bash(scp:*)",
+      "Bash(git merge:*)",
+      "Bash(git push:*)"
     ],
     "deny": [],
     "ask": []
