@@ -37,6 +37,7 @@ const OnlineSession = () => {
   const [customMessage, setCustomMessage] = useState('Hi');
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
+  const companyIdRef = useRef(null);
   const navigate = useNavigate();
 
   const getBackendUrl = () => API_BASE_URL;
@@ -107,7 +108,15 @@ const OnlineSession = () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await handoffAPI.getActiveHandoffs();
+      // Ensure we scope sessions to the logged-in company
+      if (!companyIdRef.current) {
+        const companyRes = await authAPI.getCurrentUser().catch(() => null);
+        companyIdRef.current = companyRes?.data?.id || companyRes?.data?._id || null;
+      }
+
+      const response = await handoffAPI.getActiveHandoffs(
+        companyIdRef.current ? { companyId: companyIdRef.current } : {}
+      );
       setSessions(response.data || []);
     } catch (err) {
       console.error('Error fetching handoff sessions:', err);
