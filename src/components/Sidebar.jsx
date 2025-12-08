@@ -26,7 +26,9 @@ import {
   FaUserFriends,
   FaRedo,
   FaUsers,
-  FaComments
+  FaComments,
+  FaEnvelope,
+  FaWhatsapp
 } from 'react-icons/fa';
 
 
@@ -70,6 +72,8 @@ const Sidebar = ({ isOpen = false, onClose }) => {
     { path: '/chat-summary', icon: FaComments, label: 'Chat Summary' },
     { path: '/analytics', icon: FaChartLine, label: 'Analytics' },
     { path: '/credit-history', icon: FaFileDownload, label: 'Credit History' },
+    { path: '/send-email', icon: FaEnvelope, label: 'Send Email' },
+    { path: '/whatsapp-proposals', icon: FaWhatsapp, label: 'WhatsApp Proposals' },
   ];
 
   // Commented out menu items:

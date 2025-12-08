@@ -21,6 +21,8 @@ import CreditHistory from './components/CreditHistory';
 import DeliveryReports from './components/DeliveryReport';
 import CampaignReportDetail from './components/CampaignReportDetail';
 import Settings from './components/Settings';
+import SendEmailHistory from './components/SendEmailHistory';
+import WhatsAppProposalHistory from './components/WhatsAppProposalHistory';
 
 
 // Protected Route Component
@@ -112,6 +114,8 @@ function App() {
             <Route path="/delivery-reports" element={<DeliveryReports />} />
             <Route path="/campaign-report/:campaignId" element={<CampaignReportDetail />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/send-email" element={<SendEmailHistory />} />
+            <Route path="/whatsapp-proposals" element={<WhatsAppProposalHistory />} />
 
           </Routes>
             </main>

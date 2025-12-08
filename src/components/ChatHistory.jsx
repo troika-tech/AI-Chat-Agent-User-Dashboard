@@ -143,8 +143,13 @@ const ChatHistory = () => {
             content: isAgent 
               ? agentMessages[i % agentMessages.length]
               : userMessages[i % userMessages.length],
+            session_id: contact.id, // Use contact.id as session_id for grouping
             contact: contact.name,
             contactType: contact.type,
+            phone: contact.type === 'phone' ? contact.id : null,
+            email: null,
+            name: contact.type === 'guest' ? null : contact.name,
+            is_guest: contact.type === 'guest',
             timestamp: messageDate.toISOString(),
           });
         }
@@ -237,7 +242,7 @@ const ChatHistory = () => {
           content: msg.content,
           timestamp: msg.timestamp,
           session_id: msg.session_id,
-          contact: msg.contact_name || msg.name || msg.phone || msg.email || 'Unknown',
+          contact: msg.contact_name || msg.name || msg.phone || msg.email || (msg.is_guest ? 'Guest' : 'Unknown'), // Will be updated in grouping
           contactType: msg.phone ? 'phone' : (msg.email ? 'email' : 'guest'),
           phone: msg.phone,
           email: msg.email,
@@ -358,18 +363,22 @@ const ChatHistory = () => {
   const groupMessagesBySession = (messages) => {
     const groups = {};
     
+    console.log('🔍 [Guest Numbering] Starting to group messages:', messages.length);
+    
+    // First pass: Group all messages and identify guests
     messages.forEach(message => {
       const sessionId = message.session_id || message.contact || 'unknown';
+      const isGuest = !message.phone && !message.email && (message.is_guest || message.contactType === 'guest' || (!message.name && !message.phone && !message.email));
       
       if (!groups[sessionId]) {
         groups[sessionId] = {
           session_id: sessionId,
-          contact: message.contact || message.name || message.phone || message.email || 'Unknown',
           contactType: message.contactType || (message.phone ? 'phone' : message.email ? 'email' : 'guest'),
           phone: message.phone,
           email: message.email,
           name: message.name,
           ip_address: message.ip_address,
+          is_guest: isGuest,
           messages: [],
           firstMessageDate: message.timestamp,
           lastMessageDate: message.timestamp,
@@ -391,11 +400,69 @@ const ChatHistory = () => {
       }
     });
     
-    // Convert to array and sort messages within each group
-    return Object.values(groups).map(group => ({
+    // Second pass: Sort guests by earliest message timestamp and assign numbers chronologically
+    const guestSessions = Object.values(groups)
+      .filter(group => group.is_guest)
+      .sort((a, b) => new Date(a.firstMessageDate) - new Date(b.firstMessageDate)); // Oldest first
+    
+    const guestSessionMap = {}; // Map to track guest numbers by session_id
+    guestSessions.forEach((group, index) => {
+      guestSessionMap[group.session_id] = index + 1; // Guest 1, Guest 2, etc.
+      console.log(`👤 [Guest Numbering] Assigned Guest ${index + 1} to session_id: ${group.session_id} (first message: ${new Date(group.firstMessageDate).toLocaleString()})`);
+    });
+    
+    // Third pass: Assign contact display names
+    Object.values(groups).forEach(group => {
+      let contactDisplay = null;
+      
+      // Priority 1: Phone number
+      if (group.phone) {
+        contactDisplay = group.phone;
+      }
+      // Priority 2: Email
+      else if (group.email) {
+        contactDisplay = group.email;
+      }
+      // Priority 3: Name (if not a guest placeholder)
+      else if (group.name && !group.name.toLowerCase().includes('guest')) {
+        contactDisplay = group.name;
+      }
+      // Priority 4: If it's a guest, use assigned number
+      else if (group.is_guest && guestSessionMap[group.session_id]) {
+        contactDisplay = `Guest ${guestSessionMap[group.session_id]}`;
+      }
+      // Fallback
+      else {
+        contactDisplay = 'Unknown';
+      }
+      
+      group.contact = contactDisplay;
+      console.log(`📝 [Guest Numbering] Final contact display for ${group.session_id}: ${contactDisplay}`);
+    });
+    
+    const groupedArray = Object.values(groups).map(group => ({
       ...group,
       messages: group.messages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp)),
     })).sort((a, b) => new Date(b.lastMessageDate) - new Date(a.lastMessageDate));
+    
+    console.log('✅ [Guest Numbering] Grouping complete:', {
+      totalGroups: groupedArray.length,
+      guestGroups: groupedArray.filter(g => g.is_guest).length,
+      guestMap: guestSessionMap,
+      guestOrder: guestSessions.map(g => ({ 
+        session_id: g.session_id, 
+        guestNumber: guestSessionMap[g.session_id],
+        firstMessage: new Date(g.firstMessageDate).toLocaleString()
+      })),
+      groups: groupedArray.map(g => ({ 
+        contact: g.contact, 
+        session_id: g.session_id, 
+        messageCount: g.messages.length,
+        isGuest: g.is_guest 
+      }))
+    });
+    
+    return groupedArray;
   };
 
 
@@ -712,7 +779,14 @@ const ChatHistory = () => {
                       {/* Action - View button */}
                       <td className="px-6 py-4">
                         <button
-                          onClick={() => fetchSessionChat(conversation.session_id, conversation.messages[0])}
+                          onClick={() => {
+                            const messageWithContact = {
+                              ...conversation.messages[0],
+                              contact: conversation.contact,
+                              is_guest: conversation.is_guest
+                            };
+                            fetchSessionChat(conversation.session_id, messageWithContact);
+                          }}
                           className="w-8 h-8 rounded-full border border-zinc-300 flex items-center justify-center text-zinc-500 hover:text-zinc-700 hover:border-zinc-400 hover:bg-zinc-50 transition-colors"
                           title="View complete chat"
                         >
@@ -812,7 +886,7 @@ const ChatHistory = () => {
                 <div>
                   <h2 className="text-xl font-semibold text-zinc-900">Complete Conversation</h2>
                   <p className="text-sm text-zinc-500 mt-1">
-                    {selectedMessage.contact || selectedMessage.guestId || 'Unknown'} • Session Chat
+                    {selectedMessage.contact || selectedMessage.guestId || (selectedMessage.is_guest ? 'Guest' : 'Unknown')} • Session Chat
                   </p>
                 </div>
                 <button

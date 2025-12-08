@@ -433,6 +433,93 @@ export const authAPI = {
     return response.data;
   },
 
+  // Get email history - GET /api/user/email-history
+  getEmailHistory: async (params = {}) => {
+    const { page = 1, limit = 25, chatbot_id, status, dateRange, startDate, endDate } = params;
+    if (DEMO_MODE) {
+      await mockDelay(300);
+      const mockEmails = [];
+      const templates = ['Swaraa Ai Calling Agent', 'Ai Agent - Pricing Details', 'Product Information', 'Service Details'];
+      const statuses = ['sent', 'failed'];
+      
+      for (let i = 0; i < 30; i++) {
+        mockEmails.push({
+          id: `email-${i}`,
+          chatbot_id: 'chatbot-1',
+          chatbot_name: 'My Chatbot',
+          template_id: `template-${i % templates.length}`,
+          template_name: templates[i % templates.length],
+          recipient_email: `user${i}@example.com`,
+          status: statuses[Math.floor(Math.random() * statuses.length)],
+          error_message: Math.random() > 0.8 ? 'SMTP server error' : null,
+          sent_at: new Date(Date.now() - i * 3600000).toISOString(),
+        });
+      }
+      
+      const total = mockEmails.length;
+      const startIdx = (page - 1) * limit;
+      const paginatedEmails = mockEmails.slice(startIdx, startIdx + limit);
+      
+      return {
+        success: true,
+        data: {
+          emails: paginatedEmails,
+          totalPages: Math.ceil(total / limit),
+          currentPage: page,
+          totalEmails: total,
+        }
+      };
+    }
+    const response = await api.get('/api/user/email-history', {
+      params: { page, limit, chatbot_id, status, dateRange, startDate, endDate }
+    });
+    return response.data;
+  },
+
+  // Get WhatsApp proposal history - GET /api/user/whatsapp-proposal-history
+  getWhatsAppProposalHistory: async (params = {}) => {
+    const { page = 1, limit = 25, chatbot_id, status, dateRange, startDate, endDate } = params;
+    if (DEMO_MODE) {
+      await mockDelay(300);
+      const mockProposals = [];
+      const templates = ['AI Agent Proposal', 'Service Details', 'Product Information', 'Pricing Details'];
+      const statuses = ['sent', 'failed'];
+      
+      for (let i = 0; i < 30; i++) {
+        mockProposals.push({
+          id: `proposal-${i}`,
+          chatbot_id: 'chatbot-1',
+          chatbot_name: 'My Chatbot',
+          template_id: `template-${i % templates.length}`,
+          template_name: templates[i % templates.length],
+          recipient_phone: `+91${8261900000 + i}`,
+          status: statuses[Math.floor(Math.random() * statuses.length)],
+          error_message: Math.random() > 0.8 ? 'WhatsApp API error' : null,
+          message_id: Math.random() > 0.5 ? `msg-${i}` : null,
+          sent_at: new Date(Date.now() - i * 3600000).toISOString(),
+        });
+      }
+      
+      const total = mockProposals.length;
+      const startIdx = (page - 1) * limit;
+      const paginatedProposals = mockProposals.slice(startIdx, startIdx + limit);
+      
+      return {
+        success: true,
+        data: {
+          proposals: paginatedProposals,
+          totalPages: Math.ceil(total / limit),
+          currentPage: page,
+          totalProposals: total,
+        }
+      };
+    }
+    const response = await api.get('/api/user/whatsapp-proposal-history', {
+      params: { page, limit, chatbot_id, status, dateRange, startDate, endDate }
+    });
+    return response.data;
+  },
+
   // Get follow-up leads (users who requested proposals, contact details, etc.) - GET /api/user/follow-up-leads
   getFollowUpLeads: async (params = {}) => {
     const { page = 1, limit = 20, searchTerm = '', dateRange = '30days', startDate, endDate, showContacted = 'all' } = params;

@@ -451,7 +451,7 @@ const FollowUpLeads = () => {
             <FaHandshake className="h-3 w-3" />
             <span>Follow Up Management</span>
           </div>
-          <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-zinc-900">Follow Up Leads</h1>
+          <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-zinc-900">Call/Meeting Request</h1>
           <p className="text-sm text-zinc-500 mt-1">
             Users who requested proposals, contact details, or wanted to connect.
           </p>

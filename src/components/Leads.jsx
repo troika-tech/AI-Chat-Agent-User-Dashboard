@@ -23,10 +23,11 @@ const Leads = () => {
   const [keywordsWithData, setKeywordsWithData] = useState([]);
   const [keywordCounts, setKeywordCounts] = useState({});
   const [loadingKeywords, setLoadingKeywords] = useState(false);
+  const [selectedKeywords, setSelectedKeywords] = useState([]);
 
   useEffect(() => {
     fetchHotLeads();
-  }, [pagination.page, filters.dateRange]);
+  }, [pagination.page, filters.dateRange, selectedKeywords]);
 
   // Debounce search
   useEffect(() => {
@@ -56,6 +57,17 @@ const Leads = () => {
         let leadsList = response.data?.leads || [];
         setHotWords(response.data?.hotWords || []);
 
+        // Filter by selected keywords if any (AND logic - all selected keywords must be present)
+        if (selectedKeywords.length > 0) {
+          leadsList = leadsList.filter(lead => {
+            const leadKeywords = (lead.matchedKeywords || []).map(kw => kw.toLowerCase());
+            // Check that ALL selected keywords are present in the lead's keywords
+            return selectedKeywords.every(selectedKw => 
+              leadKeywords.includes(selectedKw.toLowerCase())
+            );
+          });
+        }
+
         // Sort by date
         leadsList.sort((a, b) => {
           const dateA = new Date(a.lastDetectedAt || 0).getTime();
@@ -73,8 +85,8 @@ const Leads = () => {
         setLeads(leadsList);
         setPagination(prev => ({
           ...prev,
-          total: response.data?.total || 0,
-          pages: response.data?.totalPages || 1,
+          total: selectedKeywords.length > 0 ? leadsList.length : (response.data?.total || 0),
+          pages: selectedKeywords.length > 0 ? 1 : (response.data?.totalPages || 1),
         }));
       }
     } catch (err) {
@@ -125,7 +137,7 @@ const Leads = () => {
   };
 
   // Fetch all leads for export (respects current filters)
-  const fetchAllLeadsForExport = async (keywordFilter = null) => {
+  const fetchAllLeadsForExport = async (keywordFilter = null, keywordFilters = null) => {
     const allLeads = [];
     let currentPage = 1;
     let hasMore = true;
@@ -143,8 +155,18 @@ const Leads = () => {
         if (response.success && response.data?.leads) {
           let leadsList = response.data.leads;
 
-          // Filter by keyword if specified
-          if (keywordFilter) {
+          // Filter by keyword(s) if specified
+          if (keywordFilters && keywordFilters.length > 0) {
+            // Multiple keywords filter (AND logic - lead must have ALL selected keywords)
+            leadsList = leadsList.filter(lead => {
+              const leadKeywords = (lead.matchedKeywords || []).map(kw => kw.toLowerCase());
+              // Check that ALL selected keywords are present in the lead's keywords
+              return keywordFilters.every(filterKw => 
+                leadKeywords.includes(filterKw.toLowerCase())
+              );
+            });
+          } else if (keywordFilter) {
+            // Single keyword filter (backward compatibility)
             leadsList = leadsList.filter(lead => 
               (lead.matchedKeywords || []).some(kw => 
                 kw.toLowerCase() === keywordFilter.toLowerCase()
@@ -180,8 +202,8 @@ const Leads = () => {
     try {
       setExportingAll(true);
 
-      // Fetch all leads respecting current filters
-      const allLeads = await fetchAllLeadsForExport();
+      // Fetch all leads respecting current filters (including selected keywords)
+      const allLeads = await fetchAllLeadsForExport(null, selectedKeywords.length > 0 ? selectedKeywords : null);
 
       if (allLeads.length === 0) {
         alert('No leads found to export');
@@ -238,8 +260,8 @@ const Leads = () => {
     try {
       setLoadingKeywords(true);
       
-      // Fetch all leads to check which keywords have data
-      const allLeads = await fetchAllLeadsForExport();
+      // Fetch all leads to check which keywords have data (respecting current filters)
+      const allLeads = await fetchAllLeadsForExport(null, selectedKeywords.length > 0 ? selectedKeywords : null);
       
       // Create a set of keywords that appear in at least one lead
       // Count unique leads per keyword (not occurrences)
@@ -386,6 +408,58 @@ const Leads = () => {
         </div>
       </div>
 
+      {/* Selected Keywords Filter */}
+      {selectedKeywords.length > 0 && (
+        <div className="glass-panel p-3 bg-orange-50 border border-orange-200">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <FaFire className="text-orange-500" size={14} />
+              <span className="text-xs font-medium text-orange-700">
+                Filtered by {selectedKeywords.length > 1 ? 'all' : ''}:
+              </span>
+              {selectedKeywords.map((keyword, idx) => (
+                <span
+                  key={idx}
+                  className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-orange-500 text-white text-xs font-medium"
+                >
+                  {keyword}
+                  <button
+                    onClick={() => {
+                      const newKeywords = selectedKeywords.filter(kw => kw !== keyword);
+                      setSelectedKeywords(newKeywords);
+                      if (pagination.page !== 1) {
+                        setPagination(prev => ({ ...prev, page: 1 }));
+                      }
+                    }}
+                    className="hover:bg-orange-600 rounded-full p-0.5 transition-colors"
+                    title="Remove this filter"
+                  >
+                    <FaTimesCircle size={12} />
+                  </button>
+                </span>
+              ))}
+              {selectedKeywords.length > 1 && (
+                <button
+                  onClick={() => {
+                    setSelectedKeywords([]);
+                    if (pagination.page !== 1) {
+                      setPagination(prev => ({ ...prev, page: 1 }));
+                    }
+                  }}
+                  className="text-xs text-orange-600 hover:text-orange-700 underline"
+                  title="Clear all filters"
+                >
+                  Clear all
+                </button>
+              )}
+            </div>
+            <span className="text-xs text-orange-600">
+              {leads.length} lead{leads.length !== 1 ? 's' : ''} found
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Hot Words Display */}
       {hotWords.length > 0 && (
         <div className="glass-panel p-4">
@@ -394,14 +468,35 @@ const Leads = () => {
             <span className="text-xs font-medium text-zinc-700">Detecting keywords:</span>
           </div>
           <div className="flex flex-wrap gap-2">
-            {hotWords.map((word, idx) => (
-              <span
-                key={idx}
-                className="inline-flex items-center px-2 py-1 rounded-full bg-orange-100 text-orange-700 text-xs"
-              >
-                {word}
-              </span>
-            ))}
+            {hotWords.map((word, idx) => {
+              const isSelected = selectedKeywords.some(kw => kw.toLowerCase() === word.toLowerCase());
+              return (
+                <button
+                  key={idx}
+                  onClick={() => {
+                    if (isSelected) {
+                      // Remove keyword from selection
+                      const newKeywords = selectedKeywords.filter(kw => kw.toLowerCase() !== word.toLowerCase());
+                      setSelectedKeywords(newKeywords);
+                    } else {
+                      // Add keyword to selection
+                      setSelectedKeywords([...selectedKeywords, word]);
+                    }
+                    if (pagination.page !== 1) {
+                      setPagination(prev => ({ ...prev, page: 1 }));
+                    }
+                  }}
+                  className={`inline-flex items-center px-2 py-1 rounded-full text-xs transition-all ${
+                    isSelected
+                      ? 'bg-orange-500 text-white font-medium shadow-md ring-2 ring-orange-300'
+                      : 'bg-orange-100 text-orange-700 hover:bg-orange-200 cursor-pointer'
+                  }`}
+                  title={isSelected ? 'Click to remove filter' : 'Click to add filter'}
+                >
+                  {word}
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
