@@ -1251,11 +1251,7 @@ export const healthCheck = async () => {
 // Handoff APIs (live chat takeover)
 export const handoffAPI = {
   // Get active handoff sessions
-  getActiveHandoffs: async (chatbotId = null) => {
-    const params = {};
-    if (chatbotId) {
-      params.chatbotId = chatbotId;
-    }
+  getActiveHandoffs: async (params = {}) => {
     const response = await api.get('/api/handoff/active', { params });
     return response.data;
   },
