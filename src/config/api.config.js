@@ -3,13 +3,13 @@
 // ============================================
 // To switch backends, simply change the BACKEND_MODE value below
 // Options: 'NEW', 'OLD', 'LOCALHOST'
-
-const BACKEND_MODE = 'NEW'; // Change to 'NEW' for new backend, 'LOCALHOST' for local testing
+// Using NEW so the dashboard targets the local chatbot backend at :5000.
+const BACKEND_MODE = 'NEW'; // Set to 'OLD' for hosted API, 'LOCALHOST' for local testing
 
 // API URLs
 const BACKEND_URLS = {
   NEW: 'https://chat-apiv3.0804.in',           // New backend (Chat-Agent-Backend-V3)
-  OLD: 'https://api.0804.in',      // Old backend (chatbot-backend-old on port 5001)
+  OLD: 'https://api.0804.in',             // Hosted backend
   LOCALHOST: 'http://localhost:5000'      // Local development (new backend)
 };
 
@@ -23,8 +23,13 @@ if (!BACKEND_URLS[BACKEND_MODE]) {
   throw new Error(`Invalid BACKEND_MODE: ${BACKEND_MODE}`);
 }
 
+// Allow override via environment variable (e.g., Vite: VITE_API_BASE_URL)
+const ENV_BASE_URL = typeof import.meta !== 'undefined'
+  ? import.meta.env?.VITE_API_BASE_URL
+  : (process.env?.VITE_API_BASE_URL || process.env?.API_BASE_URL);
+
 // Export the selected URL
-export const API_BASE_URL = BACKEND_URLS[BACKEND_MODE];
+export const API_BASE_URL = ENV_BASE_URL || BACKEND_URLS[BACKEND_MODE];
 
 // Export current mode for debugging
 export const CURRENT_BACKEND_MODE = BACKEND_MODE;

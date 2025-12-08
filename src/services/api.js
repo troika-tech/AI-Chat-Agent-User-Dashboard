@@ -1248,5 +1248,43 @@ export const healthCheck = async () => {
   return response.data;
 };
 
+// Handoff APIs (live chat takeover)
+export const handoffAPI = {
+  // Get active handoff sessions
+  getActiveHandoffs: async (chatbotId = null) => {
+    const params = {};
+    if (chatbotId) {
+      params.chatbotId = chatbotId;
+    }
+    const response = await api.get('/api/handoff/active', { params });
+    return response.data;
+  },
+
+  // Send a message from agent to user
+  sendMessage: async (sessionId, message, agentId = null) => {
+    const response = await api.post('/api/handoff/send-message', {
+      sessionId,
+      message,
+      agentId,
+    });
+    return response.data;
+  },
+
+  // Approve a pending handoff session
+  approve: async (sessionId, agentId = null) => {
+    const response = await api.post('/api/handoff/approve', {
+      sessionId,
+      agentId,
+    });
+    return response.data;
+  },
+
+  // Resolve/close a handoff session
+  resolve: async (sessionId) => {
+    const response = await api.post('/api/handoff/resolve', { sessionId });
+    return response.data;
+  },
+};
+
 export default api;
 

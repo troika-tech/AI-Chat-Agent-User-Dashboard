@@ -28,7 +28,9 @@ import {
   FaUsers,
   FaComments,
   FaEnvelope,
-  FaWhatsapp
+  FaWhatsapp,
+  FaQrcode,
+  FaHeadset
 } from 'react-icons/fa';
 
 
@@ -74,6 +76,8 @@ const Sidebar = ({ isOpen = false, onClose }) => {
     { path: '/credit-history', icon: FaFileDownload, label: 'Credit History' },
     { path: '/send-email', icon: FaEnvelope, label: 'Send Email' },
     { path: '/whatsapp-proposals', icon: FaWhatsapp, label: 'WhatsApp Proposals' },
+    { path: '/whatsapp-qr', icon: FaQrcode, label: 'WhatsApp QR' },
+    { path: '/online-session', icon: FaHeadset, label: 'Online Session' },
   ];
 
   // Commented out menu items:

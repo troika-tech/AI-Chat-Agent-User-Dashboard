@@ -20,9 +20,11 @@ import LiveStatus from './components/LiveStatus';
 import CreditHistory from './components/CreditHistory';
 import DeliveryReports from './components/DeliveryReport';
 import CampaignReportDetail from './components/CampaignReportDetail';
+import OnlineSession from './components/OnlineSession';
 import Settings from './components/Settings';
 import SendEmailHistory from './components/SendEmailHistory';
 import WhatsAppProposalHistory from './components/WhatsAppProposalHistory';
+import WhatsAppQR from './components/WhatsAppQR';
 
 
 // Protected Route Component
@@ -116,6 +118,8 @@ function App() {
             <Route path="/settings" element={<Settings />} />
             <Route path="/send-email" element={<SendEmailHistory />} />
             <Route path="/whatsapp-proposals" element={<WhatsAppProposalHistory />} />
+            <Route path="/online-session" element={<OnlineSession />} />
+            <Route path="/whatsapp-qr" element={<WhatsAppQR />} />
 
           </Routes>
             </main>
