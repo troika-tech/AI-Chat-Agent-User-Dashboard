@@ -35,6 +35,7 @@ const ChatHistory = () => {
   const [selectedMessage, setSelectedMessage] = useState(null);
   const [sessionMessages, setSessionMessages] = useState([]);
   const [loadingSession, setLoadingSession] = useState(false);
+  const [groupedConversations, setGroupedConversations] = useState([]);
 
   // Fetch all contacts on mount (for filter dropdowns)
   useEffect(() => {
@@ -195,25 +196,33 @@ const ChatHistory = () => {
 
         filteredMessages.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
-        const total = filteredMessages.length;
+        // Group messages by session_id first to get total conversations
+        const allGrouped = groupMessagesBySession(filteredMessages);
+        const totalConversations = allGrouped.length;
+        
+        // Paginate conversations (not messages)
         const startIndex = (pagination.page - 1) * pagination.limit;
         const endIndex = startIndex + pagination.limit;
-        const paginatedMessages = filteredMessages.slice(startIndex, endIndex);
+        const paginatedConversations = allGrouped.slice(startIndex, endIndex);
 
-        setMessages(paginatedMessages);
+        setMessages(filteredMessages);
+        setGroupedConversations(paginatedConversations);
+        
         setPagination(prev => ({
           ...prev,
-          total,
-          pages: Math.ceil(total / pagination.limit),
+          total: totalConversations,
+          pages: Math.ceil(totalConversations / pagination.limit),
         }));
         setLoading(false);
         return;
       }
 
-      // Real API call - pass filters
+      // Real API call - fetch all messages first to group into conversations
+      // We need to fetch all messages to properly group and paginate conversations
+      // TODO: Backend should support conversation-based pagination for better performance
       const response = await authAPI.getMessages({
-        page: pagination.page,
-        limit: pagination.limit,
+        page: 1,
+        limit: 5000, // Fetch large batch to get all conversations (backend pagination is by messages, not conversations)
         dateRange: filters.dateRange,
         phone: selectedContact || undefined, // Filter by phone number
         session_id: selectedGuest?.session_id || undefined, // Filter by guest session
@@ -238,10 +247,22 @@ const ChatHistory = () => {
         }));
         
         setMessages(transformedMessages);
+        
+        // Group messages by session_id to get conversations
+        const allGrouped = groupMessagesBySession(transformedMessages);
+        const totalConversations = allGrouped.length;
+        
+        // Paginate conversations (not messages)
+        const startIndex = (pagination.page - 1) * pagination.limit;
+        const endIndex = startIndex + pagination.limit;
+        const paginatedConversations = allGrouped.slice(startIndex, endIndex);
+        
+        setGroupedConversations(paginatedConversations);
+        
         setPagination(prev => ({
           ...prev,
-          total: response.data?.totalMessages || 0,
-          pages: response.data?.totalPages || 1,
+          total: totalConversations,
+          pages: Math.ceil(totalConversations / pagination.limit),
         }));
       }
       
@@ -332,6 +353,51 @@ const ChatHistory = () => {
     if (cleanContent.length <= maxLength) return cleanContent;
     return cleanContent.substring(0, maxLength) + '...';
   };
+
+  // Group messages by session_id
+  const groupMessagesBySession = (messages) => {
+    const groups = {};
+    
+    messages.forEach(message => {
+      const sessionId = message.session_id || message.contact || 'unknown';
+      
+      if (!groups[sessionId]) {
+        groups[sessionId] = {
+          session_id: sessionId,
+          contact: message.contact || message.name || message.phone || message.email || 'Unknown',
+          contactType: message.contactType || (message.phone ? 'phone' : message.email ? 'email' : 'guest'),
+          phone: message.phone,
+          email: message.email,
+          name: message.name,
+          ip_address: message.ip_address,
+          messages: [],
+          firstMessageDate: message.timestamp,
+          lastMessageDate: message.timestamp,
+        };
+      }
+      
+      groups[sessionId].messages.push(message);
+      
+      // Update date range
+      const msgDate = new Date(message.timestamp);
+      const firstDate = new Date(groups[sessionId].firstMessageDate);
+      const lastDate = new Date(groups[sessionId].lastMessageDate);
+      
+      if (msgDate < firstDate) {
+        groups[sessionId].firstMessageDate = message.timestamp;
+      }
+      if (msgDate > lastDate) {
+        groups[sessionId].lastMessageDate = message.timestamp;
+      }
+    });
+    
+    // Convert to array and sort messages within each group
+    return Object.values(groups).map(group => ({
+      ...group,
+      messages: group.messages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp)),
+    })).sort((a, b) => new Date(b.lastMessageDate) - new Date(a.lastMessageDate));
+  };
+
 
   const getDateRangeLabel = () => {
     switch (filters.dateRange) {
@@ -554,13 +620,7 @@ const ChatHistory = () => {
           <table className="w-full">
             <thead>
               <tr className="bg-gradient-to-r from-teal-600 to-cyan-600">
-                {/* <th className="px-6 py-4 text-left">
-                  <div className="flex items-center gap-2 text-white text-xs font-semibold uppercase tracking-wider">
-                    <FaUser size={12} />
-                    <span>Sender</span>
-                  </div>
-                </th> */}
-                                <th className="px-6 py-4 text-left">
+                <th className="px-6 py-4 text-left">
                   <div className="flex items-center gap-2 text-white text-xs font-semibold uppercase tracking-wider">
                     <FaEnvelope size={12} />
                     <span>Contact</span>
@@ -572,7 +632,6 @@ const ChatHistory = () => {
                     <span>Message</span>
                   </div>
                 </th>
-              
                 <th className="px-6 py-4 text-left">
                   <div className="flex items-center gap-2 text-white text-xs font-semibold uppercase tracking-wider">
                     <FaCalendar size={12} />
@@ -594,54 +653,66 @@ const ChatHistory = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-100">
-              {messages.length === 0 ? (
+              {groupedConversations.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className="px-6 py-12 text-center text-zinc-500 text-sm">
+                  <td colSpan="5" className="px-6 py-12 text-center text-zinc-500 text-sm">
                     <FaComments className="mx-auto mb-3 text-zinc-300" size={32} />
                     <p>{loading ? 'Loading messages...' : 'No messages found'}</p>
                   </td>
                 </tr>
               ) : (
-                messages.map((message) => {
-                  const isAgent = message.sender === 'agent';
-                  
+                groupedConversations.map((conversation) => {
+                  // Show only one row per conversation
                   return (
-                    <tr key={message._id} className="hover:bg-zinc-50/50 transition-colors">
-                           {/* Contact */}
+                    <tr 
+                      key={conversation.session_id} 
+                      className="hover:bg-zinc-50/50 transition-colors border-t border-teal-200"
+                    >
+                      {/* Contact */}
                       <td className="px-6 py-4">
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-cyan-50 text-cyan-700 text-xs font-medium border border-cyan-200">
-                          <FaUsers size={10} />
-                          {message.contact || message.guestId || 'Unknown'}
-                        </span>
+                        <div className="space-y-1">
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-cyan-50 text-cyan-700 text-xs font-medium border border-cyan-200">
+                            <FaUsers size={10} />
+                            {conversation.contact}
+                          </span>
+                        </div>
                       </td>
                       
-                      {/* Message */}
+                      {/* Message - Show total count */}
                       <td className="px-6 py-4 max-w-md">
-                        <p className="text-sm text-zinc-900 leading-relaxed">
-                          {truncateMessage(message.content, 100)}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-zinc-900">
+                            {conversation.messages.length} message{conversation.messages.length !== 1 ? 's' : ''}
+                          </span>
+                        </div>
                       </td>
                       
-           
-                      
-                      {/* Date */}
+                      {/* Date - Show start time */}
                       <td className="px-6 py-4">
-                        <p className="text-sm text-zinc-600 whitespace-pre-line">
-                          {formatMessageDate(message.timestamp)}
+                        <p className="text-sm text-zinc-600">
+                          {new Date(conversation.firstMessageDate).toLocaleTimeString('en-US', {
+                            hour: 'numeric',
+                            minute: '2-digit',
+                            hour12: true,
+                          })}
                         </p>
                       </td>
 
                       {/* IP Address */}
                       <td className="px-6 py-4">
-                        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-zinc-100 text-zinc-600 text-xs font-mono">
-                          {message.ip_address || '-'}
-                        </span>
+                        {conversation.ip_address ? (
+                          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-zinc-100 text-zinc-600 text-xs font-mono">
+                            {conversation.ip_address}
+                          </span>
+                        ) : (
+                          <span className="text-zinc-300">-</span>
+                        )}
                       </td>
 
-                      {/* Action */}
+                      {/* Action - View button */}
                       <td className="px-6 py-4">
                         <button
-                          onClick={() => fetchSessionChat(message.session_id, message)}
+                          onClick={() => fetchSessionChat(conversation.session_id, conversation.messages[0])}
                           className="w-8 h-8 rounded-full border border-zinc-300 flex items-center justify-center text-zinc-500 hover:text-zinc-700 hover:border-zinc-400 hover:bg-zinc-50 transition-colors"
                           title="View complete chat"
                         >
@@ -657,65 +728,72 @@ const ChatHistory = () => {
         </div>
 
         {/* Pagination */}
-        <div className="px-6 py-4 border-t border-zinc-200 bg-zinc-50/60 flex flex-col sm:flex-row justify-between items-center gap-3">
-          <div className="flex items-center gap-3">
-            <div className="text-sm text-zinc-600">
-              Showing <span className="font-medium text-zinc-900">{((pagination.page - 1) * pagination.limit) + 1}</span> to <span className="font-medium text-zinc-900">{Math.min(pagination.page * pagination.limit, pagination.total)}</span> of <span className="font-medium text-zinc-900">{pagination.total}</span> messages
+        {groupedConversations.length > 0 && (
+          <div className="px-6 py-4 border-t border-zinc-200 bg-gradient-to-r from-zinc-50 to-zinc-100/50 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+              <div className="text-sm text-zinc-600">
+                Showing <span className="font-semibold text-zinc-900">{((pagination.page - 1) * pagination.limit) + 1}</span> to <span className="font-semibold text-zinc-900">{Math.min(pagination.page * pagination.limit, pagination.total)}</span> of <span className="font-semibold text-zinc-900">{pagination.total}</span> conversation{pagination.total !== 1 ? 's' : ''}
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-zinc-600 font-medium">Show per page:</label>
+                <select
+                  value={pagination.limit}
+                  onChange={(e) => setPagination({ ...pagination, limit: parseInt(e.target.value), page: 1 })}
+                  className="px-3 py-1.5 text-xs border border-zinc-300 rounded-lg bg-white text-zinc-700 focus:ring-2 focus:ring-emerald-500/60 focus:border-emerald-400 font-medium cursor-pointer"
+                >
+                  <option value="10">10</option>
+                  <option value="25">25</option>
+                  <option value="50">50</option>
+                  <option value="100">100</option>
+                </select>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <label className="text-xs text-zinc-600">Show:</label>
-              <select
-                value={pagination.limit}
-                onChange={(e) => setPagination({ ...pagination, limit: parseInt(e.target.value), page: 1 })}
-                className="px-2 py-1 text-xs border border-zinc-300 rounded-lg bg-white text-zinc-700 focus:ring-2 focus:ring-emerald-500/60"
-              >
-                <option value="25">25</option>
-                <option value="50">50</option>
-                <option value="100">100</option>
-              </select>
-            </div>
+            
+            {pagination.pages > 1 && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setPagination({ ...pagination, page: 1 })}
+                  disabled={pagination.page === 1}
+                  className="px-3 py-1.5 text-sm border border-zinc-300 rounded-lg bg-white text-zinc-700 hover:bg-zinc-50 hover:border-zinc-400 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white font-medium transition-colors"
+                  title="First page"
+                >
+                  ««
+                </button>
+                <button
+                  onClick={() => setPagination({ ...pagination, page: Math.max(1, pagination.page - 1) })}
+                  disabled={pagination.page === 1}
+                  className="px-3 py-1.5 text-sm border border-zinc-300 rounded-lg bg-white text-zinc-700 hover:bg-zinc-50 hover:border-zinc-400 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white font-medium transition-colors"
+                  title="Previous page"
+                >
+                  «
+                </button>
+                <span className="px-4 py-1.5 text-sm font-semibold text-zinc-900 bg-white rounded-lg border border-zinc-300 min-w-[100px] text-center">
+                  Page {pagination.page} of {pagination.pages}
+                </span>
+                <button
+                  onClick={() => setPagination({ ...pagination, page: Math.min(pagination.pages, pagination.page + 1) })}
+                  disabled={pagination.page >= pagination.pages}
+                  className="px-3 py-1.5 text-sm border border-zinc-300 rounded-lg bg-white text-zinc-700 hover:bg-zinc-50 hover:border-zinc-400 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white font-medium transition-colors"
+                  title="Next page"
+                >
+                  »
+                </button>
+                <button
+                  onClick={() => setPagination({ ...pagination, page: pagination.pages })}
+                  disabled={pagination.page >= pagination.pages}
+                  className="px-3 py-1.5 text-sm border border-zinc-300 rounded-lg bg-white text-zinc-700 hover:bg-zinc-50 hover:border-zinc-400 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white font-medium transition-colors"
+                  title="Last page"
+                >
+                  »»
+                </button>
+              </div>
+            )}
           </div>
-          
-          {pagination.pages > 1 && (
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setPagination({ ...pagination, page: 1 })}
-                disabled={pagination.page === 1}
-                className="px-3 py-1.5 text-sm border border-zinc-300 rounded-lg bg-white text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-              >
-                ««
-              </button>
-              <button
-                onClick={() => setPagination({ ...pagination, page: Math.max(1, pagination.page - 1) })}
-                disabled={pagination.page === 1}
-                className="px-3 py-1.5 text-sm border border-zinc-300 rounded-lg bg-white text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-              >
-                «
-              </button>
-              <span className="px-4 py-1.5 text-sm font-medium text-zinc-700 bg-white rounded-lg border border-zinc-300">
-                Page {pagination.page} of {pagination.pages}
-              </span>
-              <button
-                onClick={() => setPagination({ ...pagination, page: Math.min(pagination.pages, pagination.page + 1) })}
-                disabled={pagination.page >= pagination.pages}
-                className="px-3 py-1.5 text-sm border border-zinc-300 rounded-lg bg-white text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-              >
-                »
-              </button>
-              <button
-                onClick={() => setPagination({ ...pagination, page: pagination.pages })}
-                disabled={pagination.page >= pagination.pages}
-                className="px-3 py-1.5 text-sm border border-zinc-300 rounded-lg bg-white text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-              >
-                »»
-              </button>
-            </div>
-          )}
-        </div>
+        )}
       </div>
 
       {/* Complete Session Chat Modal */}
-      {showDetailsModal && selectedMessage && createPortal(
+      {showDetailsModal && selectedMessage ? createPortal(
         <div 
           className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[100] p-4"
           onClick={() => {
@@ -829,7 +907,7 @@ const ChatHistory = () => {
           </div>
         </div>,
         document.body
-      )}
+      ) : null}
     </div>
   );
 };

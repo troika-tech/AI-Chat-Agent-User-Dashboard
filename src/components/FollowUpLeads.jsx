@@ -16,6 +16,8 @@ import {
   FaTimes,
   FaStickyNote,
   FaHandshake,
+  FaFileDownload,
+  FaFire,
 } from 'react-icons/fa';
 import { authAPI } from '../services/api';
 
@@ -43,6 +45,14 @@ const FollowUpLeads = () => {
   const [selectedLead, setSelectedLead] = useState(null);
   const [notesText, setNotesText] = useState('');
   const [savingNotes, setSavingNotes] = useState(false);
+  
+  // Export modal state
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportingAll, setExportingAll] = useState(false);
+  const [exportingKeyword, setExportingKeyword] = useState(null);
+  const [keywordsWithData, setKeywordsWithData] = useState([]);
+  const [keywordCounts, setKeywordCounts] = useState({});
+  const [loadingKeywords, setLoadingKeywords] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -164,6 +174,264 @@ const FollowUpLeads = () => {
       hour: '2-digit',
       minute: '2-digit',
     });
+  };
+
+  // Format date for CSV
+  const formatDateForCSV = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleString('en-US', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true,
+    });
+  };
+
+  // CSV building helper function
+  const buildCSV = (rows) => {
+    return rows
+      .map((row) =>
+        row.map((cell) => {
+          if (cell === null || cell === undefined) return '""';
+          const safe = String(cell).replace(/"/g, '""');
+          return `"${safe}"`;
+        }).join(',')
+      ).join('\n');
+  };
+
+  // Fetch all leads for export (respects current filters)
+  const fetchAllLeadsForExport = async (keywordFilter = null) => {
+    const allLeads = [];
+    let currentPage = 1;
+    let hasMore = true;
+    const limit = 100; // Fetch 100 at a time for efficiency
+
+    while (hasMore) {
+      try {
+        const response = await authAPI.getFollowUpLeads({
+          page: currentPage,
+          limit: limit,
+          searchTerm: search,
+          dateRange: dateRange === 'custom' ? 'custom' : dateRange,
+          startDate: dateRange === 'custom' ? dateFrom : undefined,
+          endDate: dateRange === 'custom' ? dateTo : undefined,
+          showContacted,
+        });
+
+        if (response.success && response.data?.leads) {
+          let leadsList = response.data.leads;
+
+          // Filter by keyword if specified
+          if (keywordFilter) {
+            leadsList = leadsList.filter(lead => 
+              (lead.matchedKeywords || []).some(kw => 
+                kw.toLowerCase() === keywordFilter.toLowerCase()
+              )
+            );
+          }
+
+          allLeads.push(...leadsList);
+
+          // Check if there are more pages
+          const totalPages = response.data?.totalPages || 1;
+          hasMore = currentPage < totalPages;
+          currentPage++;
+        } else {
+          hasMore = false;
+        }
+      } catch (err) {
+        console.error('Error fetching leads for export:', err);
+        hasMore = false;
+      }
+    }
+
+    return allLeads;
+  };
+
+  // Check which keywords have data available
+  const checkKeywordsWithData = async () => {
+    if (keywords.length === 0) {
+      setKeywordsWithData([]);
+      return;
+    }
+
+    try {
+      setLoadingKeywords(true);
+      
+      // Fetch all leads to check which keywords have data
+      const allLeads = await fetchAllLeadsForExport();
+      
+      // Create a set of keywords that appear in at least one lead
+      // Count unique leads per keyword (not occurrences)
+      const keywordsSet = new Set();
+      const keywordCounts = {};
+      
+      allLeads.forEach(lead => {
+        (lead.matchedKeywords || []).forEach(keyword => {
+          keywordsSet.add(keyword);
+          // Count unique leads, not keyword occurrences
+          if (!keywordCounts[keyword]) {
+            keywordCounts[keyword] = new Set();
+          }
+          keywordCounts[keyword].add(lead.session_id);
+        });
+      });
+      
+      // Convert Sets to counts
+      Object.keys(keywordCounts).forEach(keyword => {
+        keywordCounts[keyword] = keywordCounts[keyword].size;
+      });
+      
+      // Filter keywords to only include keywords that have data
+      // Sort by count (descending) so most common keywords appear first
+      const availableKeywords = keywords
+        .filter(keyword => keywordsSet.has(keyword))
+        .map(keyword => ({
+          keyword,
+          count: keywordCounts[keyword] || 0
+        }))
+        .sort((a, b) => b.count - a.count)
+        .map(item => item.keyword);
+      
+      setKeywordsWithData(availableKeywords);
+      setKeywordCounts(keywordCounts);
+    } catch (err) {
+      console.error('Error checking keywords with data:', err);
+      // Fallback to showing all keywords if check fails
+      setKeywordsWithData(keywords);
+    } finally {
+      setLoadingKeywords(false);
+    }
+  };
+
+  // Handle export modal open
+  const handleOpenExportModal = () => {
+    setShowExportModal(true);
+    checkKeywordsWithData();
+  };
+
+  // Export all leads
+  const handleExportAll = async () => {
+    if (pagination.total === 0) {
+      alert('No leads to export');
+      return;
+    }
+
+    try {
+      setExportingAll(true);
+
+      // Fetch all leads respecting current filters
+      const allLeads = await fetchAllLeadsForExport();
+
+      if (allLeads.length === 0) {
+        alert('No leads found to export');
+        setExportingAll(false);
+        return;
+      }
+
+      // Build CSV rows
+      const rows = [
+        ['Name', 'Phone', 'Email', 'Session ID', 'Keywords Detected', 'Message Preview', 'First Detected At', 'Last Detected At', 'Contacted Status', 'Contacted At', 'Notes'],
+      ];
+
+      allLeads.forEach((lead) => {
+        rows.push([
+          lead.name || 'Anonymous',
+          lead.phone || '',
+          lead.email || '',
+          lead.session_id || '',
+          (lead.matchedKeywords || []).join('; '),
+          lead.messageSnippets?.[0]?.content || '',
+          formatDateForCSV(lead.firstDetectedAt),
+          formatDateForCSV(lead.lastDetectedAt),
+          lead.isContacted ? 'Yes' : 'No',
+          lead.isContacted && lead.contactedAt ? formatDateForCSV(lead.contactedAt) : '',
+          lead.notes || '',
+        ]);
+      });
+
+      // Generate CSV
+      const csvContent = buildCSV(rows);
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      
+      // Generate filename with date
+      const dateStr = new Date().toISOString().split('T')[0];
+      link.download = `follow-up-leads-all-${dateStr}.csv`;
+      
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Error exporting leads:', err);
+      alert('Failed to export leads. Please try again.');
+    } finally {
+      setExportingAll(false);
+    }
+  };
+
+  // Export leads by specific keyword
+  const handleExportByKeyword = async (keyword) => {
+    if (!keyword) return;
+
+    try {
+      setExportingKeyword(keyword);
+
+      // Fetch all leads and filter by keyword
+      const allLeads = await fetchAllLeadsForExport(keyword);
+
+      if (allLeads.length === 0) {
+        alert(`No leads found for keyword "${keyword}"`);
+        setExportingKeyword(null);
+        return;
+      }
+
+      // Build CSV rows
+      const rows = [
+        ['Name', 'Phone', 'Email', 'Session ID', 'Keywords Detected', 'Message Preview', 'First Detected At', 'Last Detected At', 'Contacted Status', 'Contacted At', 'Notes'],
+      ];
+
+      allLeads.forEach((lead) => {
+        rows.push([
+          lead.name || 'Anonymous',
+          lead.phone || '',
+          lead.email || '',
+          lead.session_id || '',
+          (lead.matchedKeywords || []).join('; '),
+          lead.messageSnippets?.[0]?.content || '',
+          formatDateForCSV(lead.firstDetectedAt),
+          formatDateForCSV(lead.lastDetectedAt),
+          lead.isContacted ? 'Yes' : 'No',
+          lead.isContacted && lead.contactedAt ? formatDateForCSV(lead.contactedAt) : '',
+          lead.notes || '',
+        ]);
+      });
+
+      // Generate CSV
+      const csvContent = buildCSV(rows);
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      
+      // Generate filename with keyword and date
+      const dateStr = new Date().toISOString().split('T')[0];
+      const safeKeyword = keyword.replace(/[^a-z0-9]/gi, '-').toLowerCase();
+      link.download = `follow-up-leads-keyword-${safeKeyword}-${dateStr}.csv`;
+      
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Error exporting leads by keyword:', err);
+      alert(`Failed to export leads for keyword "${keyword}". Please try again.`);
+    } finally {
+      setExportingKeyword(null);
+    }
   };
 
   // Get contact display
@@ -316,6 +584,19 @@ const FollowUpLeads = () => {
               />
             </>
           )}
+
+          {/* Export Button */}
+          <div className="flex items-center">
+            <button
+              onClick={handleOpenExportModal}
+              disabled={pagination.total === 0}
+              className="w-full md:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-lg transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Export leads"
+            >
+              <FaFileDownload size={14} />
+              <span>Export</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -576,6 +857,145 @@ const FollowUpLeads = () => {
                   Save Notes
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Export Modal */}
+      {showExportModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="glass-card max-w-3xl w-full p-6 space-y-6 border border-zinc-200 max-h-[90vh] overflow-y-auto bg-white rounded-xl">
+            <div className="flex items-center justify-between mb-4 border-b border-zinc-200 pb-4">
+              <div>
+                <h2 className="text-xl font-semibold text-zinc-900">Export Follow Up Leads</h2>
+                <p className="text-sm text-zinc-500 mt-1">
+                  Export leads matching your current filters: {search ? `"${search}"` : 'All'} • {showContacted === 'all' ? 'All Status' : showContacted === 'pending' ? 'Pending' : 'Contacted'} • {dateRange === 'all' ? 'All time' : dateRange === 'custom' ? `${dateFrom} to ${dateTo}` : dateRange.replace('days', ' days')}
+                </p>
+              </div>
+              <button
+                onClick={() => setShowExportModal(false)}
+                className="p-2 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors"
+              >
+                <FaTimes size={20} />
+              </button>
+            </div>
+
+            {/* Export All Section */}
+            <div className="bg-gradient-to-r from-purple-50 to-indigo-50 p-4 rounded-lg border border-purple-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-purple-500 rounded-lg">
+                    <FaFileDownload className="text-white" size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-zinc-900">Export All Leads</h3>
+                    <p className="text-xs text-zinc-600 mt-0.5">
+                      Export all {pagination.total} lead{pagination.total !== 1 ? 's' : ''} matching current filters
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleExportAll}
+                  disabled={exportingAll || pagination.total === 0}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-lg transition-colors text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {exportingAll ? (
+                    <>
+                      <FaSpinner className="animate-spin" size={12} />
+                      <span>Exporting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <FaFileDownload size={12} />
+                      <span>Export All</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Export by Keyword Section */}
+            {loadingKeywords ? (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <FaTag className="text-purple-500" size={14} />
+                  <h3 className="text-sm font-semibold text-zinc-900">Export by Keyword</h3>
+                </div>
+                <div className="flex items-center justify-center py-8">
+                  <FaSpinner className="animate-spin text-purple-500" size={24} />
+                  <span className="ml-3 text-sm text-zinc-600">Checking available keywords...</span>
+                </div>
+              </div>
+            ) : keywordsWithData.length > 0 ? (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <FaTag className="text-purple-500" size={14} />
+                  <h3 className="text-sm font-semibold text-zinc-900">Export by Keyword</h3>
+                  <span className="text-xs text-zinc-500">({keywordsWithData.length} keyword{keywordsWithData.length !== 1 ? 's' : ''} with data)</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-96 overflow-y-auto pr-2">
+                  {keywordsWithData.map((word, idx) => {
+                    const count = keywordCounts[word] || 0;
+                    return (
+                      <div
+                        key={idx}
+                        className="flex items-center justify-between p-3 bg-zinc-50 hover:bg-zinc-100 rounded-lg border border-zinc-200 transition-colors"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="inline-flex items-center px-2 py-1 rounded-full bg-purple-100 text-purple-700 text-xs font-medium">
+                            {word}
+                          </span>
+                          <span className="text-xs text-zinc-500">
+                            ({count} lead{count !== 1 ? 's' : ''})
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => handleExportByKeyword(word)}
+                          disabled={exportingKeyword === word}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-500 hover:bg-purple-600 text-white rounded-lg transition-colors text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {exportingKeyword === word ? (
+                            <>
+                              <FaSpinner className="animate-spin" size={10} />
+                              <span>Exporting...</span>
+                            </>
+                          ) : (
+                            <>
+                              <FaFileDownload size={10} />
+                              <span>Export</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : keywords.length > 0 ? (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <FaTag className="text-purple-500" size={14} />
+                  <h3 className="text-sm font-semibold text-zinc-900">Export by Keyword</h3>
+                </div>
+                <div className="text-center py-8 text-zinc-500 text-sm bg-zinc-50 rounded-lg border border-zinc-200">
+                  <FaTag className="text-zinc-300 mx-auto mb-2" size={32} />
+                  <p>No keywords have data matching current filters</p>
+                  <p className="text-xs text-zinc-400 mt-1">Try adjusting your search, status, or date range</p>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-8 text-zinc-500 text-sm">
+                <FaTag className="text-zinc-300 mx-auto mb-2" size={32} />
+                <p>No keywords available for export</p>
+              </div>
+            )}
+
+            {/* Footer */}
+            <div className="pt-4 border-t border-zinc-200">
+              <p className="text-xs text-zinc-500 text-center">
+                Exported files will be in CSV format and include: Name, Phone, Email, Session ID, Keywords, Message Preview, Detection Dates, Contact Status, Contacted Date, and Notes
+              </p>
             </div>
           </div>
         </div>

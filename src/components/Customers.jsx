@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FaUsers, FaPhone, FaSpinner, FaSearch, FaCalendar, FaEye, FaTimes, FaRobot, FaUser, FaComment, FaClock } from 'react-icons/fa';
+import { FaUsers, FaPhone, FaSpinner, FaSearch, FaCalendar, FaEye, FaTimes, FaRobot, FaUser, FaComment, FaClock, FaFileDownload } from 'react-icons/fa';
 import ReactMarkdown from 'react-markdown';
 import { authAPI } from '../services/api';
 
@@ -15,6 +15,14 @@ const Customers = () => {
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [chatMessages, setChatMessages] = useState([]);
   const [chatLoading, setChatLoading] = useState(false);
+  
+  // Export modal state
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportingAll, setExportingAll] = useState(false);
+  const [exportingPhoneNumber, setExportingPhoneNumber] = useState(null);
+  const [phoneNumbersWithData, setPhoneNumbersWithData] = useState([]);
+  const [phoneNumberCounts, setPhoneNumberCounts] = useState({});
+  const [loadingPhoneNumbers, setLoadingPhoneNumbers] = useState(false);
 
   useEffect(() => {
     fetchCustomers();
@@ -63,6 +71,174 @@ const Customers = () => {
       hour: '2-digit',
       minute: '2-digit'
     });
+  };
+
+  // Format date for CSV
+  const formatDateForCSV = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleString('en-US', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true,
+    });
+  };
+
+  // CSV building helper function
+  const buildCSV = (rows) => {
+    return rows
+      .map((row) =>
+        row.map((cell) => {
+          if (cell === null || cell === undefined) return '""';
+          const safe = String(cell).replace(/"/g, '""');
+          return `"${safe}"`;
+        }).join(',')
+      ).join('\n');
+  };
+
+  // Extract phone numbers with data
+  const extractPhoneNumbersWithData = () => {
+    if (filteredCustomers.length === 0) {
+      setPhoneNumbersWithData([]);
+      setPhoneNumberCounts({});
+      return;
+    }
+
+    // Count customers per phone number
+    const counts = {};
+    filteredCustomers.forEach(customer => {
+      const phone = customer.phone || '';
+      counts[phone] = (counts[phone] || 0) + 1;
+    });
+
+    // Get unique phone numbers and sort
+    const uniquePhones = Object.keys(counts)
+      .filter(phone => phone) // Filter out empty strings
+      .sort((a, b) => {
+        // Sort by count (descending), then alphabetically
+        if (counts[b] !== counts[a]) {
+          return counts[b] - counts[a];
+        }
+        return a.localeCompare(b);
+      });
+
+    setPhoneNumbersWithData(uniquePhones);
+    setPhoneNumberCounts(counts);
+  };
+
+  // Handle export modal open
+  const handleOpenExportModal = () => {
+    setShowExportModal(true);
+    setLoadingPhoneNumbers(true);
+    // Small delay to show loading state, then extract phone numbers
+    setTimeout(() => {
+      extractPhoneNumbersWithData();
+      setLoadingPhoneNumbers(false);
+    }, 100);
+  };
+
+  // Export all customers
+  const handleExportAll = async () => {
+    if (filteredCustomers.length === 0) {
+      alert('No customers to export');
+      return;
+    }
+
+    try {
+      setExportingAll(true);
+
+      // Build CSV rows
+      const rows = [
+        ['Phone Number', 'Collected On', 'Message Count'],
+      ];
+
+      filteredCustomers.forEach((customer) => {
+        rows.push([
+          customer.phone || '',
+          formatDateForCSV(customer.firstContact),
+          customer.messageCount || 0,
+        ]);
+      });
+
+      // Generate CSV
+      const csvContent = buildCSV(rows);
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      
+      // Generate filename with date
+      const dateStr = new Date().toISOString().split('T')[0];
+      const filename = searchQuery.trim() 
+        ? `customers-filtered-${dateStr}.csv`
+        : `customers-all-${dateStr}.csv`;
+      link.download = filename;
+      
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Error exporting customers:', err);
+      alert('Failed to export customers. Please try again.');
+    } finally {
+      setExportingAll(false);
+    }
+  };
+
+  // Export customers by specific phone number
+  const handleExportByPhoneNumber = async (phoneNumber) => {
+    if (!phoneNumber) return;
+
+    try {
+      setExportingPhoneNumber(phoneNumber);
+
+      // Filter customers by phone number
+      const customersForNumber = filteredCustomers.filter(
+        customer => customer.phone === phoneNumber
+      );
+
+      if (customersForNumber.length === 0) {
+        alert(`No customers found for phone number "${phoneNumber}"`);
+        setExportingPhoneNumber(null);
+        return;
+      }
+
+      // Build CSV rows
+      const rows = [
+        ['Phone Number', 'Collected On', 'Message Count'],
+      ];
+
+      customersForNumber.forEach((customer) => {
+        rows.push([
+          customer.phone || '',
+          formatDateForCSV(customer.firstContact),
+          customer.messageCount || 0,
+        ]);
+      });
+
+      // Generate CSV
+      const csvContent = buildCSV(rows);
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      
+      // Generate filename with phone number and date
+      const dateStr = new Date().toISOString().split('T')[0];
+      const safePhone = phoneNumber.replace(/[^0-9]/g, '').slice(-8); // Last 8 digits
+      link.download = `customers-phone-${safePhone}-${dateStr}.csv`;
+      
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Error exporting customers by phone number:', err);
+      alert(`Failed to export customers for phone number "${phoneNumber}". Please try again.`);
+    } finally {
+      setExportingPhoneNumber(null);
+    }
   };
 
   const handleViewChats = async (customer) => {
@@ -136,6 +312,15 @@ const Customers = () => {
             onChange={(e) => setSearchQuery(e.target.value)}
             className="flex-1 px-4 py-2.5 border border-zinc-200 rounded-lg bg-white text-zinc-900 focus:ring-2 focus:ring-emerald-500/60 focus:border-emerald-400 text-sm"
           />
+          <button
+            onClick={handleOpenExportModal}
+            disabled={customers.length === 0}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Export customers"
+          >
+            <FaFileDownload size={14} />
+            <span>Export</span>
+          </button>
         </div>
       </div>
 
@@ -313,6 +498,150 @@ const Customers = () => {
             <div className="px-6 py-3 border-t border-zinc-200 bg-zinc-50/80 rounded-b-2xl">
               <p className="text-xs text-zinc-500 text-center">
                 Total {chatMessages.length} messages from this customer
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Export Modal */}
+      {showExportModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="glass-card max-w-3xl w-full p-6 space-y-6 border border-zinc-200 max-h-[90vh] overflow-y-auto bg-white rounded-xl">
+            <div className="flex items-center justify-between mb-4 border-b border-zinc-200 pb-4">
+              <div>
+                <h2 className="text-xl font-semibold text-zinc-900">Export Customers</h2>
+                <p className="text-sm text-zinc-500 mt-1">
+                  {searchQuery.trim() 
+                    ? `Exporting filtered customers: "${searchQuery}" • ${filteredCustomers.length} customer${filteredCustomers.length !== 1 ? 's' : ''}`
+                    : `Export all ${customers.length} customer${customers.length !== 1 ? 's' : ''}`
+                  }
+                </p>
+              </div>
+              <button
+                onClick={() => setShowExportModal(false)}
+                className="p-2 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors"
+              >
+                <FaTimes size={20} />
+              </button>
+            </div>
+
+            {/* Export All Section */}
+            <div className="bg-gradient-to-r from-emerald-50 to-teal-50 p-4 rounded-lg border border-emerald-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-emerald-500 rounded-lg">
+                    <FaFileDownload className="text-white" size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-zinc-900">Export All Customers</h3>
+                    <p className="text-xs text-zinc-600 mt-0.5">
+                      Export all {filteredCustomers.length} customer{filteredCustomers.length !== 1 ? 's' : ''} {searchQuery.trim() ? 'matching your search' : ''}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleExportAll}
+                  disabled={exportingAll || filteredCustomers.length === 0}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {exportingAll ? (
+                    <>
+                      <FaSpinner className="animate-spin" size={12} />
+                      <span>Exporting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <FaFileDownload size={12} />
+                      <span>Export All</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Export by Phone Number Section */}
+            {loadingPhoneNumbers ? (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <FaPhone className="text-emerald-500" size={14} />
+                  <h3 className="text-sm font-semibold text-zinc-900">Export by Phone Number</h3>
+                </div>
+                <div className="flex items-center justify-center py-8">
+                  <FaSpinner className="animate-spin text-emerald-500" size={24} />
+                  <span className="ml-3 text-sm text-zinc-600">Loading phone numbers...</span>
+                </div>
+              </div>
+            ) : phoneNumbersWithData.length > 0 ? (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <FaPhone className="text-emerald-500" size={14} />
+                  <h3 className="text-sm font-semibold text-zinc-900">Export by Phone Number</h3>
+                  <span className="text-xs text-zinc-500">({phoneNumbersWithData.length} phone number{phoneNumbersWithData.length !== 1 ? 's' : ''} available)</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-96 overflow-y-auto pr-2">
+                  {phoneNumbersWithData.map((phoneNumber, idx) => {
+                    const count = phoneNumberCounts[phoneNumber] || 0;
+                    return (
+                      <div
+                        key={idx}
+                        className="flex items-center justify-between p-3 bg-zinc-50 hover:bg-zinc-100 rounded-lg border border-zinc-200 transition-colors"
+                      >
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center flex-shrink-0">
+                            <FaPhone size={10} />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium text-zinc-900 truncate">{phoneNumber}</p>
+                            <p className="text-xs text-zinc-500">
+                              {count} customer{count !== 1 ? 's' : ''}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleExportByPhoneNumber(phoneNumber)}
+                          disabled={exportingPhoneNumber === phoneNumber}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0 ml-2"
+                        >
+                          {exportingPhoneNumber === phoneNumber ? (
+                            <>
+                              <FaSpinner className="animate-spin" size={10} />
+                              <span>Exporting...</span>
+                            </>
+                          ) : (
+                            <>
+                              <FaFileDownload size={10} />
+                              <span>Export</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : filteredCustomers.length > 0 ? (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <FaPhone className="text-emerald-500" size={14} />
+                  <h3 className="text-sm font-semibold text-zinc-900">Export by Phone Number</h3>
+                </div>
+                <div className="text-center py-8 text-zinc-500 text-sm bg-zinc-50 rounded-lg border border-zinc-200">
+                  <FaPhone className="text-zinc-300 mx-auto mb-2" size={32} />
+                  <p>No phone numbers available</p>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-8 text-zinc-500 text-sm">
+                <FaUsers className="text-zinc-300 mx-auto mb-2" size={32} />
+                <p>No customers available for export</p>
+              </div>
+            )}
+
+            {/* Footer */}
+            <div className="pt-4 border-t border-zinc-200">
+              <p className="text-xs text-zinc-500 text-center">
+                Exported files will be in CSV format and include: Phone Number, Collected On (Date), and Message Count
               </p>
             </div>
           </div>
