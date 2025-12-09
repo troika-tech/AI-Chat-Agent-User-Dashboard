@@ -44,15 +44,23 @@ const Customers = () => {
     try {
       setLoading(true);
       setError(null);
-      
+
       const response = await authAPI.getAllContacts();
-      
+
       if (response?.success) {
         const contacts = response.data?.contacts || [];
-        setCustomers(contacts);
-        setFilteredCustomers(contacts);
+
+        // Sort contacts by firstContact date in descending order (most recent first)
+        const sortedContacts = [...contacts].sort((a, b) => {
+          const dateA = a.firstContact ? new Date(a.firstContact).getTime() : 0;
+          const dateB = b.firstContact ? new Date(b.firstContact).getTime() : 0;
+          return dateB - dateA; // Descending order
+        });
+
+        setCustomers(sortedContacts);
+        setFilteredCustomers(sortedContacts);
       }
-      
+
       setLoading(false);
     } catch (err) {
       console.error('Error fetching customers:', err);
