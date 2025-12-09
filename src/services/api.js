@@ -126,6 +126,12 @@ export const authAPI = {
     return response.data;
   },
 
+  // Get user dashboard sidebar permissions - GET /api/user/dashboard-sidebar
+  getDashboardSidebarConfig: async () => {
+    const response = await api.get('/api/user/dashboard-sidebar');
+    return response.data;
+  },
+
   // Get user sessions (top chats) - GET /api/user/sessions
   getSessions: async (dateRange = '7days') => {
     if (DEMO_MODE) {

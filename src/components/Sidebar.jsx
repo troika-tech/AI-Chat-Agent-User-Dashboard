@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 
 import { Link, useLocation } from 'react-router-dom';
+import { authAPI } from '../services/api';
 
 import { 
   
@@ -39,6 +40,11 @@ const Sidebar = ({ isOpen = false, onClose }) => {
 
   const [collapsed, setCollapsed] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
+  const [permissions, setPermissions] = useState({
+    enabled: true,
+    allowedKeys: null,
+  });
+  const [loadingPermissions, setLoadingPermissions] = useState(true);
 
   const location = useLocation();
 
@@ -63,22 +69,53 @@ const Sidebar = ({ isOpen = false, onClose }) => {
     }
   }, [isOpen, isMobile]);
 
-
-
   const menuItems = [
-    { path: '/dashboard', icon: FaHome, label: 'Dashboard' },
-    { path: '/leads', icon: FaUserFriends, label: 'Leads' },
-    { path: '/chat-history', icon: FaList, label: 'Chat History' },
-    { path: '/follow-up', icon: FaRedo, label: 'C\\M Request' },
-    { path: '/customers', icon: FaUsers, label: 'Verified Customers' },
-    { path: '/chat-summary', icon: FaComments, label: 'Chat Summary' },
-    { path: '/analytics', icon: FaChartLine, label: 'Analytics' },
-    { path: '/credit-history', icon: FaFileDownload, label: 'Credit History' },
-    { path: '/send-email', icon: FaEnvelope, label: 'Send Email' },
-    { path: '/whatsapp-proposals', icon: FaWhatsapp, label: 'WhatsApp Proposals' },
-    { path: '/whatsapp-qr', icon: FaQrcode, label: 'WhatsApp QR' },
-    { path: '/online-session', icon: FaHeadset, label: 'Online Session' },
+    { key: 'dashboard', path: '/dashboard', icon: FaHome, label: 'Dashboard' },
+    { key: 'leads', path: '/leads', icon: FaUserFriends, label: 'Leads' },
+    { key: 'chat-history', path: '/chat-history', icon: FaList, label: 'Chat History' },
+    { key: 'follow-up', path: '/follow-up', icon: FaRedo, label: 'C\\M Request' },
+    { key: 'customers', path: '/customers', icon: FaUsers, label: 'Verified Customers' },
+    { key: 'chat-summary', path: '/chat-summary', icon: FaComments, label: 'Chat Summary' },
+    { key: 'analytics', path: '/analytics', icon: FaChartLine, label: 'Analytics' },
+    { key: 'credit-history', path: '/credit-history', icon: FaFileDownload, label: 'Credit History' },
+    { key: 'send-email', path: '/send-email', icon: FaEnvelope, label: 'Send Email' },
+    { key: 'whatsapp-proposals', path: '/whatsapp-proposals', icon: FaWhatsapp, label: 'WhatsApp Proposals' },
+    { key: 'whatsapp-qr', path: '/whatsapp-qr', icon: FaQrcode, label: 'WhatsApp QR' },
+    { key: 'online-session', path: '/online-session', icon: FaHeadset, label: 'Online Session' },
   ];
+
+  // Fetch sidebar permissions from backend
+  useEffect(() => {
+    const fetchPermissions = async () => {
+      try {
+        const response = await authAPI.getDashboardSidebarConfig();
+        const data = response?.data || response;
+        const allowedKeys =
+          Array.isArray(data?.allowed_menu_keys) && data.allowed_menu_keys.length > 0
+            ? data.allowed_menu_keys
+            : null;
+        setPermissions({
+          enabled: data?.sidebar_enabled !== undefined ? data.sidebar_enabled : true,
+          allowedKeys,
+        });
+      } catch (error) {
+        console.error('Error fetching sidebar permissions:', error);
+        // Fail open to avoid blocking access if config fetch fails
+        setPermissions({
+          enabled: true,
+          allowedKeys: null,
+        });
+      } finally {
+        setLoadingPermissions(false);
+      }
+    };
+
+    fetchPermissions();
+  }, []);
+
+  const visibleMenuItems = permissions.enabled
+    ? menuItems.filter((item) => !permissions.allowedKeys || permissions.allowedKeys.includes(item.key))
+    : [];
 
   // Commented out menu items:
   // { path: '/campaigns', icon: FaBullseye, label: 'Campaigns' },
@@ -97,7 +134,13 @@ const Sidebar = ({ isOpen = false, onClose }) => {
     return currentPath === path;
   };
 
+  if (loadingPermissions) {
+    return null;
+  }
 
+  if (!permissions.enabled) {
+    return null;
+  }
 
   return (
 
@@ -178,7 +221,7 @@ const Sidebar = ({ isOpen = false, onClose }) => {
 
         <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto scrollbar-hide">
 
-          {menuItems.map((item) => {
+          {visibleMenuItems.map((item) => {
 
             const Icon = item.icon;
 
@@ -188,7 +231,7 @@ const Sidebar = ({ isOpen = false, onClose }) => {
 
               <Link
 
-                key={item.path}
+                key={item.key || item.path}
 
                 to={item.path}
 
