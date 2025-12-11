@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import { FaBars, FaPhone } from 'react-icons/fa';
+import { FaBars, FaPhone, FaHeadset, FaEnvelope } from 'react-icons/fa';
 import Sidebar from './components/Sidebar';
 import UserMenu from './components/UserMenu';
 import Login from './components/Login';
@@ -36,6 +36,22 @@ const ProtectedRoute = ({ children }) => {
 
 function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [supportOpen, setSupportOpen] = useState(false);
+  const supportRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (supportRef.current && !supportRef.current.contains(event.target)) {
+        setSupportOpen(false);
+      }
+    };
+    if (supportOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [supportOpen]);
 
 
 
@@ -84,6 +100,30 @@ function App() {
                 <div className="hidden sm:flex items-center gap-2 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-xs text-emerald-700">
                   <span className="inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
                   Live
+                </div>
+                <div className="relative" ref={supportRef}>
+                  <button
+                    onClick={() => setSupportOpen((prev) => !prev)}
+                    className="flex items-center justify-center w-11 h-11 bg-white border border-zinc-200 rounded-full shadow-sm hover:shadow-md transition-all text-emerald-600"
+                    title="Support"
+                  >
+                    <FaHeadset className="h-5 w-5" />
+                  </button>
+                  {supportOpen && (
+                    <div className="absolute right-0 mt-2 w-64 rounded-xl border border-zinc-200 bg-white shadow-lg shadow-black/10 p-4 space-y-2 text-sm text-zinc-800">
+                      <div className="font-semibold text-zinc-900">Troika Tech Support</div>
+                      <div className="flex items-center gap-2">
+                        <FaPhone className="text-emerald-600" />
+                        <span>+91 98212 11755</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <FaEnvelope className="text-emerald-600" />
+                        <span>info@troikatech.in</span>
+                      </div>
+                      <div className="text-xs text-zinc-500">Business hours: Monday to Friday</div>
+                      <div className="text-xs text-zinc-500">Timmings: 10am - 6pm</div>
+                    </div>
+                  )}
                 </div>
                 <div className="hidden lg:block">
                   <UserMenu />

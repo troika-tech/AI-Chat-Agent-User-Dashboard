@@ -38,9 +38,85 @@ const OnlineSession = () => {
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
   const companyIdRef = useRef(null);
+  const pendingAlertedRef = useRef(new Set());
+  const userHasInteractedRef = useRef(false);
+  const pendingSoundQueuedRef = useRef(false);
+  const audioContextRef = useRef(null);
   const navigate = useNavigate();
 
   const getBackendUrl = () => API_BASE_URL;
+  const PENDING_STALE_MINUTES = 5;
+
+  const playNotificationTone = async () => {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+
+      if (!audioContextRef.current) {
+        audioContextRef.current = new AudioCtx();
+      }
+
+      const ctx = audioContextRef.current;
+      if (ctx.state === 'suspended') {
+        await ctx.resume().catch(() => {});
+      }
+
+      const oscillator = ctx.createOscillator();
+      const gainNode = ctx.createGain();
+      oscillator.type = 'sine';
+      oscillator.frequency.value = 880;
+      gainNode.gain.value = 0.04;
+
+      oscillator.connect(gainNode);
+      gainNode.connect(ctx.destination);
+
+      oscillator.start();
+      oscillator.stop(ctx.currentTime + 0.25);
+    } catch (err) {
+      console.warn('Notification sound failed:', err);
+    }
+  };
+
+  const isPendingStale = (session) => {
+    if (!session || session.status !== 'pending') return false;
+    const last = session.last_activity || session.created_at;
+    if (!last) return false;
+    const minutes = (Date.now() - new Date(last)) / (1000 * 60);
+    return minutes > PENDING_STALE_MINUTES;
+  };
+
+  const handlePendingNotifications = (incomingSessions = []) => {
+    const pendingSessions = incomingSessions.filter(
+      (session) => session.status === 'pending' && session.session_id && !isPendingStale(session)
+    );
+    const currentPendingIds = new Set(pendingSessions.map((session) => session.session_id));
+    const newPendingSessions = pendingSessions.filter((session) => !pendingAlertedRef.current.has(session.session_id));
+
+    if (newPendingSessions.length > 0) {
+      newPendingSessions.forEach((session) => {
+        pendingAlertedRef.current.add(session.session_id);
+        toast.info(
+          `New chat needs approval${session.user_name ? `: ${session.user_name}` : ''}`,
+          {
+            autoClose: 6000,
+            onClick: () => setSelectedSession(session),
+          }
+        );
+      });
+
+      if (userHasInteractedRef.current) {
+        playNotificationTone();
+      } else {
+        pendingSoundQueuedRef.current = true;
+      }
+    }
+
+    pendingAlertedRef.current.forEach((sessionId) => {
+      if (!currentPendingIds.has(sessionId)) {
+        pendingAlertedRef.current.delete(sessionId);
+      }
+    });
+  };
 
   const checkWhatsAppStatus = async () => {
     try {
@@ -117,7 +193,9 @@ const OnlineSession = () => {
       const response = await handoffAPI.getActiveHandoffs(
         companyIdRef.current ? { companyId: companyIdRef.current } : {}
       );
-      setSessions(response.data || []);
+      const incomingSessions = response.data || [];
+      setSessions(incomingSessions);
+      handlePendingNotifications(incomingSessions);
     } catch (err) {
       console.error('Error fetching handoff sessions:', err);
       if (err.code === 'ECONNREFUSED' || err.message?.includes('Network Error') || !err.response) {
@@ -167,6 +245,24 @@ const OnlineSession = () => {
   };
 
   useEffect(() => {
+    const markInteraction = () => {
+      userHasInteractedRef.current = true;
+      if (pendingSoundQueuedRef.current) {
+        pendingSoundQueuedRef.current = false;
+        playNotificationTone();
+      }
+    };
+
+    window.addEventListener('pointerdown', markInteraction);
+    window.addEventListener('keydown', markInteraction);
+
+    return () => {
+      window.removeEventListener('pointerdown', markInteraction);
+      window.removeEventListener('keydown', markInteraction);
+    };
+  }, []);
+
+  useEffect(() => {
     fetchHandoffSessions();
 
     if (autoRefresh) {
@@ -202,9 +298,11 @@ const OnlineSession = () => {
   }, [selectedSession?.session_id, selectedSession?.status, autoRefresh]);
 
   const isSessionInactive = (session) => {
+    if (!session) return true;
     if (session.status === 'inactive' || session.status === 'closed' || session.status === 'resolved') {
       return true;
     }
+    if (isPendingStale(session)) return true;
 
     if (session.status === 'active' && session.last_activity) {
       const lastActivity = new Date(session.last_activity);
@@ -589,7 +687,7 @@ const OnlineSession = () => {
                     </button>
                   </div>
                 </div>
-              ) : selectedSession.status === 'pending' ? (
+              ) : selectedSession.status === 'pending' && !isPendingStale(selectedSession) ? (
                 <div className="p-4 border-t border-zinc-200 bg-yellow-50">
                   <div className="text-center py-2">
                     <p className="text-sm text-yellow-800 font-medium">⏳ Waiting for approval. Click "Approve" to start chatting.</p>
@@ -613,13 +711,13 @@ const OnlineSession = () => {
                       <textarea
                         value=""
                         onChange={() => {}}
-                        placeholder="Session is inactive. Chat is disabled."
+                        placeholder="Session is over. Chat is closed."
                         rows={1}
                         className="w-full px-4 py-2 border-0 rounded-lg bg-transparent text-gray-400 focus:ring-0 focus:outline-none text-sm resize-none cursor-not-allowed"
                         disabled
                       />
                       <div className="px-4 pb-2">
-                        <p className="text-xs text-gray-400">This session has ended. You cannot send messages.</p>
+                        <p className="text-xs text-gray-400">This session has ended. No further messages can be sent.</p>
                       </div>
                     </div>
                     <button disabled className="px-4 py-2 rounded-lg bg-gray-300 text-gray-500 cursor-not-allowed transition-colors flex items-center gap-2">
