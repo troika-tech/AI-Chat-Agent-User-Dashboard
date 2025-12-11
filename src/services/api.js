@@ -132,6 +132,51 @@ export const authAPI = {
     return response.data;
   },
 
+  // Profanity Management APIs
+  getProfanityConfig: async (chatbotId) => {
+    const response = await api.get(`/api/chatbot/${chatbotId}/profanity-config`);
+    return response.data;
+  },
+
+  updateProfanityConfig: async (chatbotId, enabled, customKeywords, showInUserDashboard) => {
+    const response = await api.put(`/api/chatbot/${chatbotId}/profanity-config`, {
+      enabled,
+      custom_keywords: customKeywords,
+      show_in_user_dashboard: showInUserDashboard,
+    });
+    return response.data;
+  },
+
+  getBannedSessions: async (chatbotId, params = {}) => {
+    const queryParams = new URLSearchParams();
+    if (params.status) queryParams.append('status', params.status);
+    if (params.search) queryParams.append('search', params.search);
+    if (params.page) queryParams.append('page', params.page);
+    if (params.limit) queryParams.append('limit', params.limit);
+    
+    const queryString = queryParams.toString();
+    const response = await api.get(`/api/chatbot/${chatbotId}/banned-sessions${queryString ? `?${queryString}` : ''}`);
+    return response.data;
+  },
+
+  unbanSession: async (chatbotId, banId) => {
+    const response = await api.post(`/api/chatbot/${chatbotId}/banned-sessions/${banId}/unban`);
+    return response.data;
+  },
+
+  bulkUnbanSessions: async (chatbotId, banIds) => {
+    const response = await api.post(`/api/chatbot/${chatbotId}/banned-sessions/bulk-unban`, {
+      ban_ids: banIds,
+    });
+    return response.data;
+  },
+
+  // Get offer templates for user dashboard - Global/Universal
+  getOfferTemplates: async () => {
+    const response = await api.get(`/api/chatbot/offer-templates/user`);
+    return response.data;
+  },
+
   // Get user sessions (top chats) - GET /api/user/sessions
   getSessions: async (dateRange = '7days') => {
     if (DEMO_MODE) {
