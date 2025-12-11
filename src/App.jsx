@@ -27,6 +27,8 @@ import Settings from './components/Settings';
 import SendEmailHistory from './components/SendEmailHistory';
 import WhatsAppProposalHistory from './components/WhatsAppProposalHistory';
 import WhatsAppQR from './components/WhatsAppQR';
+import BannedSessions from './components/BannedSessions';
+import Offers from './components/Offers';
 
 
 // Protected Route Component
@@ -140,8 +142,8 @@ function App() {
                         <FaEnvelope className="text-emerald-600" />
                         <span>info@troikatech.in</span>
                       </div>
-                      <div className="text-xs text-zinc-500">Business hours: Monday to Friday</div>
-                      <div className="text-xs text-zinc-500">Timmings: 10am - 6pm</div>
+                      <div className="text-xs text-zinc-500">Business hours: Monday to Saturday</div>
+                      <div className="text-xs text-zinc-500">Timings: 10am - 6pm</div>
                     </div>
                   )}
                 </div>
@@ -180,6 +182,8 @@ function App() {
             <Route path="/whatsapp-proposals" element={<WhatsAppProposalHistory />} />
             <Route path="/online-session" element={<OnlineSession />} />
             <Route path="/whatsapp-qr" element={<WhatsAppQR />} />
+            <Route path="/banned-sessions" element={<BannedSessions />} />
+            <Route path="/offers" element={<Offers />} />
 
           </Routes>
             </main>

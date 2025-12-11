@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 
 import { Link, useLocation } from 'react-router-dom';
 import { authAPI } from '../services/api';
@@ -17,6 +17,9 @@ import {
   
   FaTimes,
   
+  FaBan,
+  
+  FaGift,
   
   FaPhone,
   FaList,
@@ -43,6 +46,7 @@ const Sidebar = ({ isOpen = false, onClose }) => {
   const [permissions, setPermissions] = useState({
     enabled: true,
     allowedKeys: null,
+    offerDisplayText: 'Offers',
   });
   const [loadingPermissions, setLoadingPermissions] = useState(true);
 
@@ -69,7 +73,8 @@ const Sidebar = ({ isOpen = false, onClose }) => {
     }
   }, [isOpen, isMobile]);
 
-  const menuItems = [
+  // Create menu items with dynamic offer label
+  const menuItems = useMemo(() => [
     { key: 'dashboard', path: '/dashboard', icon: FaHome, label: 'Dashboard' },
     { key: 'leads', path: '/leads', icon: FaUserFriends, label: 'Leads' },
     { key: 'chat-history', path: '/chat-history', icon: FaList, label: 'Chat History' },
@@ -82,7 +87,9 @@ const Sidebar = ({ isOpen = false, onClose }) => {
     { key: 'whatsapp-proposals', path: '/whatsapp-proposals', icon: FaWhatsapp, label: 'WhatsApp Proposals' },
     { key: 'whatsapp-qr', path: '/whatsapp-qr', icon: FaQrcode, label: 'WhatsApp QR' },
     { key: 'online-session', path: '/online-session', icon: FaHeadset, label: 'Online Session' },
-  ];
+    { key: 'banned-sessions', path: '/banned-sessions', icon: FaBan, label: 'Banned Sessions' },
+    { key: 'offers', path: '/offers', icon: FaGift, label: permissions.offerDisplayText },
+  ], [permissions.offerDisplayText]);
 
   // Fetch sidebar permissions from backend
   useEffect(() => {
@@ -97,7 +104,12 @@ const Sidebar = ({ isOpen = false, onClose }) => {
         setPermissions({
           enabled: data?.sidebar_enabled !== undefined ? data.sidebar_enabled : true,
           allowedKeys,
+          offerDisplayText: data?.offer_sidebar_display_text || 'Offers',
         });
+        // Store chatbot_id for use in other components
+        if (data?.chatbot_id) {
+          localStorage.setItem('user_chatbot_id', data.chatbot_id);
+        }
       } catch (error) {
         console.error('Error fetching sidebar permissions:', error);
         // Fail open to avoid blocking access if config fetch fails
