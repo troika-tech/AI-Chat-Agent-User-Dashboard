@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FaEye, FaEyeSlash } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import { authAPI } from '../services/api';
+import { initializeSession } from '../utils/sessionManager';
 
 const Login = () => {
   const navigate = useNavigate();
@@ -13,6 +14,18 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Check for session invalidation message
+  useEffect(() => {
+    const sessionInvalidated = sessionStorage.getItem('sessionInvalidated');
+    const message = sessionStorage.getItem('sessionInvalidationMessage');
+    
+    if (sessionInvalidated === 'true' && message) {
+      toast.info(message, { autoClose: 5000 });
+      sessionStorage.removeItem('sessionInvalidated');
+      sessionStorage.removeItem('sessionInvalidationMessage');
+    }
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -34,13 +47,23 @@ const Login = () => {
       const response = await authAPI.login(formData.email, formData.password);
 
       if (response.success) {
-        // Store the JWT token and user info
+        // Store the JWT token and user info FIRST
         localStorage.setItem('authToken', response.data.token);
         localStorage.setItem('user', JSON.stringify(response.data.user));
 
-        // Debug: Log user data to see structure
-        console.log('✅ Login successful');
-        console.log('User:', response.data.user);
+        // Initialize session and broadcast new login to other tabs IMMEDIATELY
+        const userId = response.data.user.id || response.data.user._id;
+        console.log('🔐 Login successful, user data:', response.data.user);
+        console.log('🆔 Extracted user ID:', userId);
+        
+        if (userId) {
+          // Initialize session immediately (no delay needed)
+          const sessionId = initializeSession(String(userId));
+          console.log('✅ Session initialized with ID:', sessionId);
+          console.log('📡 Broadcasting new login to all tabs...');
+        } else {
+          console.warn('⚠️ No user ID found in response');
+        }
 
         toast.success('Login successful!');
 

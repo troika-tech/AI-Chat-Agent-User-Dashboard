@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FaCog, FaSignOutAlt, FaUser } from 'react-icons/fa';
 import { authAPI } from '../services/api';
+import { clearSession } from '../utils/sessionManager';
 
 const UserMenu = () => {
   const [open, setOpen] = useState(false);
@@ -34,9 +35,8 @@ const UserMenu = () => {
       console.error('Logout error:', error);
       // Continue with local logout even if API call fails
     } finally {
-      // Clear local storage
-      localStorage.removeItem('authToken');
-      localStorage.removeItem('user');
+      // Clear session and local storage (includes sessionId)
+      clearSession();
       setOpen(false);
       navigate('/login');
     }

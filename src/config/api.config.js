@@ -4,6 +4,7 @@
 // To switch backends, simply change the BACKEND_MODE value below
 // Options: 'NEW', 'OLD', 'LOCALHOST'
 // Using NEW so the dashboard targets the local chatbot backend at :5000.
+// const BACKEND_MODE = 'NEW'; // Set to 'OLD' for hosted API, 'LOCALHOST' for local testing
 const BACKEND_MODE = 'NEW'; // Set to 'OLD' for hosted API, 'LOCALHOST' for local testing
 
 // API URLs

@@ -6,6 +6,8 @@ import { FaBars, FaPhone, FaHeadset, FaEnvelope } from 'react-icons/fa';
 import Sidebar from './components/Sidebar';
 import UserMenu from './components/UserMenu';
 import Login from './components/Login';
+import SessionListener from './components/SessionListener';
+import InactivityTimer from './components/InactivityTimer';
 import DashboardOverview from './components/DashboardOverview';
 import Campaigns from './components/Campaigns';
 import Analytics from './components/Analytics';
@@ -63,7 +65,25 @@ function App() {
         v7_relativeSplatPath: true,
       }}
     >
-      <ToastContainer position="top-right" autoClose={3000} hideProgressBar={false} newestOnTop={false} closeOnClick rtl={false} pauseOnFocusLoss draggable pauseOnHover theme="light" />
+      <ToastContainer 
+        position="top-right" 
+        autoClose={3000} 
+        hideProgressBar={false} 
+        newestOnTop={false} 
+        closeOnClick 
+        rtl={false} 
+        pauseOnFocusLoss={false}
+        draggable 
+        pauseOnHover={false}
+        theme="light"
+        enableMultiContainer={false}
+      />
+      
+      {/* Session Listener for cross-tab logout - Always active */}
+      <SessionListener />
+      
+      {/* Inactivity Timer - Auto logout after 4 minutes of inactivity */}
+      <InactivityTimer />
 
       <Routes>
         {/* Public Routes */}
