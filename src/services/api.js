@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { API_BASE_URL, DEMO_MODE } from '../config/api.config';
+import { clearSession } from '../utils/sessionManager';
 
 // API client is now configured via api.config.js
 // To change backend URL, edit src/config/api.config.js
@@ -31,20 +32,45 @@ api.interceptors.request.use(
 
 // Response interceptor - Handle 401 errors globally
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    // Reset inactivity timer on successful API response (indicates active usage)
+    if (window.dispatchEvent) {
+      window.dispatchEvent(new CustomEvent('userActivity'));
+    }
+    return response;
+  },
   (error) => {
     console.error('API Error:', error.response?.data || error.message);
 
-    // If 401 Unauthorized, redirect to login
+    // If 401 Unauthorized, clear session and redirect to login
     if (error.response?.status === 401) {
-      // Clear stored auth data
-      localStorage.removeItem('authToken');
+      const errorMessage = error.response?.data?.message || 'Session expired';
+      
+      // Check if it's a session invalidation (user logged in elsewhere)
+      const isSessionInvalidated = errorMessage.includes('invalidated') || 
+                                   errorMessage.includes('logged in on another') ||
+                                   errorMessage.includes('another device') ||
+                                   errorMessage.includes('another browser');
+      
+      console.log('🚪 401 Unauthorized - Session invalidated:', isSessionInvalidated);
+      console.log('📋 Error message:', errorMessage);
+      console.log('🔄 Clearing session and redirecting to login...');
+      
+      // Clear session and stored auth data
+      clearSession();
       localStorage.removeItem('refreshToken');
-      localStorage.removeItem('user');
+
+      // Store a flag to show message on login page
+      if (isSessionInvalidated) {
+        sessionStorage.setItem('sessionInvalidated', 'true');
+        sessionStorage.setItem('sessionInvalidationMessage', 'You have been logged out because you logged in on another device or browser.');
+      }
 
       // Redirect to login page if not already there
       if (window.location.pathname !== '/login') {
-        window.location.href = '/login';
+        setTimeout(() => {
+          window.location.href = '/login';
+        }, 100);
       }
     }
 
@@ -65,10 +91,10 @@ export const authAPI = {
     return response.data;
   },
 
-  // Logout - POST /api/auth/logout
+  // Logout - POST /api/user/logout
   logout: async () => {
     try {
-      const response = await api.post('/api/auth/logout');
+      const response = await api.post('/api/user/logout');
       return response.data;
     } catch (error) {
       // Even if logout fails on server, clear local storage
