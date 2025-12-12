@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { FaSearch, FaFilter, FaChevronDown, FaEye, FaComments, FaUser, FaRobot, FaBrain, FaSpinner, FaEnvelope, FaCalendar, FaUsers, FaGlobe } from 'react-icons/fa';
+import { FaSearch, FaFilter, FaChevronDown, FaEye, FaComments, FaUser, FaRobot, FaBrain, FaSpinner, FaEnvelope, FaCalendar, FaUsers, FaGlobe, FaMapMarkerAlt } from 'react-icons/fa';
 import ReactMarkdown from 'react-markdown';
 import { DEMO_MODE } from '../config/api.config';
 import { authAPI } from '../services/api';
@@ -21,15 +21,19 @@ const ChatHistory = () => {
   const [contactFilterOpen, setContactFilterOpen] = useState(false);
   const [guestFilterOpen, setGuestFilterOpen] = useState(false);
   const [dateFilterOpen, setDateFilterOpen] = useState(false);
+  const [locationFilterOpen, setLocationFilterOpen] = useState(false);
   
   const [allContacts, setAllContacts] = useState([]);
   const [allGuests, setAllGuests] = useState([]); // Array of {session_id, label, number}
+  const [allLocations, setAllLocations] = useState([]); // Array of unique locations
   const [selectedContact, setSelectedContact] = useState(''); // Phone number
   const [selectedGuest, setSelectedGuest] = useState(null); // Guest object with session_id
+  const [selectedLocation, setSelectedLocation] = useState(''); // Location string
   
   const contactFilterRef = useRef(null);
   const guestFilterRef = useRef(null);
   const dateFilterRef = useRef(null);
+  const locationFilterRef = useRef(null);
   
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedMessage, setSelectedMessage] = useState(null);
@@ -44,7 +48,7 @@ const ChatHistory = () => {
 
   useEffect(() => {
     fetchChatMessages();
-  }, [pagination.page, pagination.limit, filters.dateRange, selectedContact, selectedGuest]);
+  }, [pagination.page, pagination.limit, filters.dateRange, selectedContact, selectedGuest, selectedLocation]);
 
   // Debounce search
   useEffect(() => {
@@ -69,6 +73,9 @@ const ChatHistory = () => {
       }
       if (dateFilterRef.current && !dateFilterRef.current.contains(event.target)) {
         setDateFilterOpen(false);
+      }
+      if (locationFilterRef.current && !locationFilterRef.current.contains(event.target)) {
+        setLocationFilterOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -203,12 +210,27 @@ const ChatHistory = () => {
 
         // Group messages by session_id first to get total conversations
         const allGrouped = groupMessagesBySession(filteredMessages);
-        const totalConversations = allGrouped.length;
+        
+        // Extract unique locations from grouped conversations (include all locations including "Local Network")
+        const uniqueLocations = [...new Set(
+          allGrouped
+            .map(conv => conv.location)
+            .filter(loc => loc && loc !== 'Unknown') // Only exclude "Unknown", keep "Local Network"
+        )].sort();
+        setAllLocations(uniqueLocations);
+        
+        // Filter by location if selected
+        let filteredGrouped = allGrouped;
+        if (selectedLocation) {
+          filteredGrouped = allGrouped.filter(conv => conv.location === selectedLocation);
+        }
+        
+        const totalConversations = filteredGrouped.length;
         
         // Paginate conversations (not messages)
         const startIndex = (pagination.page - 1) * pagination.limit;
         const endIndex = startIndex + pagination.limit;
-        const paginatedConversations = allGrouped.slice(startIndex, endIndex);
+        const paginatedConversations = filteredGrouped.slice(startIndex, endIndex);
 
         setMessages(filteredMessages);
         setGroupedConversations(paginatedConversations);
@@ -249,18 +271,34 @@ const ChatHistory = () => {
           name: msg.name,
           is_guest: msg.is_guest,
           ip_address: msg.ip_address || null,
+          location: msg.location || null,
         }));
         
         setMessages(transformedMessages);
         
         // Group messages by session_id to get conversations
         const allGrouped = groupMessagesBySession(transformedMessages);
-        const totalConversations = allGrouped.length;
+        
+        // Extract unique locations from grouped conversations (include all locations including "Local Network")
+        const uniqueLocations = [...new Set(
+          allGrouped
+            .map(conv => conv.location)
+            .filter(loc => loc && loc !== 'Unknown') // Only exclude "Unknown", keep "Local Network"
+        )].sort();
+        setAllLocations(uniqueLocations);
+        
+        // Filter by location if selected
+        let filteredGrouped = allGrouped;
+        if (selectedLocation) {
+          filteredGrouped = allGrouped.filter(conv => conv.location === selectedLocation);
+        }
+        
+        const totalConversations = filteredGrouped.length;
         
         // Paginate conversations (not messages)
         const startIndex = (pagination.page - 1) * pagination.limit;
         const endIndex = startIndex + pagination.limit;
-        const paginatedConversations = allGrouped.slice(startIndex, endIndex);
+        const paginatedConversations = filteredGrouped.slice(startIndex, endIndex);
         
         setGroupedConversations(paginatedConversations);
         
@@ -378,6 +416,7 @@ const ChatHistory = () => {
           email: message.email,
           name: message.name,
           ip_address: message.ip_address,
+          location: message.location,
           is_guest: isGuest,
           messages: [],
           firstMessageDate: message.timestamp,
@@ -411,8 +450,22 @@ const ChatHistory = () => {
       console.log(`👤 [Guest Numbering] Assigned Guest ${index + 1} to session_id: ${group.session_id} (first message: ${new Date(group.firstMessageDate).toLocaleString()})`);
     });
     
-    // Third pass: Assign contact display names
+    // Third pass: Extract IP address and location from first user message and assign contact display names
     Object.values(groups).forEach(group => {
+      // Extract IP address and location from the first user message in the session
+      const firstUserMessage = group.messages
+        .filter(msg => msg.sender === 'user' && msg.ip_address)
+        .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))[0];
+      
+      if (firstUserMessage) {
+        if (firstUserMessage.ip_address) {
+          group.ip_address = firstUserMessage.ip_address;
+        }
+        if (firstUserMessage.location) {
+          group.location = firstUserMessage.location;
+        }
+      }
+      
       let contactDisplay = null;
       
       // Priority 1: Phone number
@@ -437,7 +490,7 @@ const ChatHistory = () => {
       }
       
       group.contact = contactDisplay;
-      console.log(`📝 [Guest Numbering] Final contact display for ${group.session_id}: ${contactDisplay}`);
+      console.log(`📝 [Guest Numbering] Final contact display for ${group.session_id}: ${contactDisplay}, IP: ${group.ip_address || 'N/A'}`);
     });
     
     const groupedArray = Object.values(groups).map(group => ({
@@ -515,6 +568,7 @@ const ChatHistory = () => {
                 setContactFilterOpen(!contactFilterOpen);
                 setGuestFilterOpen(false);
                 setDateFilterOpen(false);
+                setLocationFilterOpen(false);
               }}
               className="inline-flex items-center gap-2 px-4 py-2 border border-zinc-200 rounded-lg bg-white text-zinc-700 hover:bg-zinc-50 text-sm font-medium transition-colors"
             >
@@ -561,6 +615,7 @@ const ChatHistory = () => {
                 setGuestFilterOpen(!guestFilterOpen);
                 setContactFilterOpen(false);
                 setDateFilterOpen(false);
+                setLocationFilterOpen(false);
               }}
               className="inline-flex items-center gap-2 px-4 py-2 border border-zinc-200 rounded-lg bg-white text-zinc-700 hover:bg-zinc-50 text-sm font-medium transition-colors"
             >
@@ -607,6 +662,7 @@ const ChatHistory = () => {
                 setDateFilterOpen(!dateFilterOpen);
                 setContactFilterOpen(false);
                 setGuestFilterOpen(false);
+                setLocationFilterOpen(false);
               }}
               className="inline-flex items-center gap-2 px-4 py-2 border border-zinc-200 rounded-lg bg-white text-zinc-700 hover:bg-zinc-50 text-sm font-medium transition-colors"
             >
@@ -636,6 +692,60 @@ const ChatHistory = () => {
                       {option.label}
                     </button>
                   ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Filter by Location */}
+          <div className="relative" ref={locationFilterRef}>
+            <button
+              onClick={() => {
+                setLocationFilterOpen(!locationFilterOpen);
+                setContactFilterOpen(false);
+                setGuestFilterOpen(false);
+                setDateFilterOpen(false);
+              }}
+              className="inline-flex items-center gap-2 px-4 py-2 border border-zinc-200 rounded-lg bg-white text-zinc-700 hover:bg-zinc-50 text-sm font-medium transition-colors"
+            >
+              <FaMapMarkerAlt size={12} className="text-zinc-400" />
+              <span>{selectedLocation || 'Filter by Location'}</span>
+              <FaChevronDown size={10} className={`text-zinc-400 transition-transform ${locationFilterOpen ? 'rotate-180' : ''}`} />
+            </button>
+            
+            {locationFilterOpen && (
+              <div className="absolute top-full left-0 mt-2 w-64 bg-white border border-zinc-200 rounded-lg shadow-lg z-50 max-h-64 overflow-y-auto">
+                <div className="p-2">
+                  <button
+                    onClick={() => {
+                      setSelectedLocation('');
+                      setPagination(prev => ({ ...prev, page: 1 }));
+                      setLocationFilterOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-2 text-sm rounded-lg ${!selectedLocation ? 'bg-emerald-50 text-emerald-700' : 'text-zinc-700 hover:bg-zinc-50'}`}
+                  >
+                    All Locations
+                  </button>
+                  {allLocations.length > 0 ? (
+                    allLocations.map(location => (
+                      <button
+                        key={location}
+                        onClick={() => {
+                          setSelectedLocation(location);
+                          setPagination(prev => ({ ...prev, page: 1 }));
+                          setLocationFilterOpen(false);
+                        }}
+                        className={`w-full text-left px-3 py-2 text-sm rounded-lg flex items-center gap-2 ${selectedLocation === location ? 'bg-emerald-50 text-emerald-700' : 'text-zinc-700 hover:bg-zinc-50'}`}
+                      >
+                        <FaMapMarkerAlt size={10} className="text-zinc-400" />
+                        <span>{location}</span>
+                      </button>
+                    ))
+                  ) : (
+                    <div className="px-3 py-2 text-sm text-zinc-400">
+                      No locations available
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -713,6 +823,12 @@ const ChatHistory = () => {
                 </th>
                 <th className="px-6 py-4 text-left">
                   <div className="flex items-center gap-2 text-white text-xs font-semibold uppercase tracking-wider">
+                    <FaMapMarkerAlt size={12} />
+                    <span>Location</span>
+                  </div>
+                </th>
+                <th className="px-6 py-4 text-left">
+                  <div className="flex items-center gap-2 text-white text-xs font-semibold uppercase tracking-wider">
                     <FaEye size={12} />
                     <span>Action</span>
                   </div>
@@ -722,7 +838,7 @@ const ChatHistory = () => {
             <tbody className="divide-y divide-zinc-100">
               {groupedConversations.length === 0 ? (
                 <tr>
-                  <td colSpan="5" className="px-6 py-12 text-center text-zinc-500 text-sm">
+                  <td colSpan="6" className="px-6 py-12 text-center text-zinc-500 text-sm">
                     <FaComments className="mx-auto mb-3 text-zinc-300" size={32} />
                     <p>{loading ? 'Loading messages...' : 'No messages found'}</p>
                   </td>
@@ -770,6 +886,18 @@ const ChatHistory = () => {
                         {conversation.ip_address ? (
                           <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-zinc-100 text-zinc-600 text-xs font-mono">
                             {conversation.ip_address}
+                          </span>
+                        ) : (
+                          <span className="text-zinc-300">-</span>
+                        )}
+                      </td>
+
+                      {/* Location */}
+                      <td className="px-6 py-4">
+                        {conversation.location ? (
+                          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-blue-50 text-blue-700 text-xs font-medium">
+                            <FaMapMarkerAlt size={10} />
+                            {conversation.location}
                           </span>
                         ) : (
                           <span className="text-zinc-300">-</span>
