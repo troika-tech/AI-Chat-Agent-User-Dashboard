@@ -3,12 +3,12 @@
 // ============================================
 // To switch backends, simply change the BACKEND_MODE value below
 // Options: 'NEW', 'OLD', 'LOCALHOST'
-// Using LOCALHOST for local development testing
+// Using NEW for production
 const BACKEND_MODE = 'NEW'; // Set to 'OLD' for hosted API, 'NEW' for production, 'LOCALHOST' for local testing
 
 // API URLs
 const BACKEND_URLS = {
-  NEW: 'https://chat-apiv3.0804.in',           // New backend (Chat-Agent-Backend-V3)
+  NEW: 'https://chat-apiv3.0804.in',      // New backend (Chat-Agent-Backend-V3)
   OLD: 'https://api.0804.in',             // Hosted backend
   LOCALHOST: 'http://localhost:5000'      // Local development (new backend)
 };
