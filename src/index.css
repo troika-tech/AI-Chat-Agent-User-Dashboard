@@ -62,5 +62,31 @@
       opacity: 1;
     }
   }
+
+  .offer-highlight-pulse {
+    animation: offer-pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes offer-pulse {
+    0%, 100% {
+      box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
+    }
+    50% {
+      box-shadow: 0 0 0 8px rgba(34, 197, 94, 0);
+    }
+  }
+
+  .offer-updated-pulse {
+    animation: offer-updated-pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes offer-updated-pulse {
+    0%, 100% {
+      box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7);
+    }
+    50% {
+      box-shadow: 0 0 0 8px rgba(59, 130, 246, 0);
+    }
+  }
 }
 
