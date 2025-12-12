@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { FaGift, FaSpinner, FaExternalLinkAlt, FaTimes } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import { authAPI } from '../services/api';
+import { getHighlightedOffers, clearHighlightedOffers } from '../utils/notificationHandler';
 
 const Offers = () => {
   const [loading, setLoading] = useState(true);
@@ -9,10 +10,43 @@ const Offers = () => {
   const [displayText, setDisplayText] = useState('Offers');
   const [enabled, setEnabled] = useState(false);
   const [selectedOffer, setSelectedOffer] = useState(null);
+  const [highlightedOffers, setHighlightedOffers] = useState({});
 
   // Fetch offers on mount (no chatbot ID needed - global offers)
   useEffect(() => {
     fetchOffers();
+    // Load highlighted offers BEFORE clearing them
+    const highlights = getHighlightedOffers();
+    setHighlightedOffers(highlights);
+    
+    // Clear highlighted offers after a delay to allow them to be displayed
+    // This ensures the highlight is visible when the page loads
+    const clearTimer = setTimeout(() => {
+      clearHighlightedOffers();
+      setHighlightedOffers({});
+    }, 20000); // Clear after 20 seconds
+    
+    return () => clearTimeout(clearTimer);
+  }, []);
+
+  // Listen for highlighted offers updates
+  useEffect(() => {
+    const handleHighlightedOffersUpdate = (event) => {
+      if (event.detail && event.detail.highlighted) {
+        setHighlightedOffers(event.detail.highlighted);
+      } else {
+        const highlights = getHighlightedOffers();
+        setHighlightedOffers(highlights);
+      }
+    };
+
+    window.addEventListener('highlightedOffersUpdated', handleHighlightedOffersUpdate);
+    window.addEventListener('offerNotification', handleHighlightedOffersUpdate);
+    
+    return () => {
+      window.removeEventListener('highlightedOffersUpdated', handleHighlightedOffersUpdate);
+      window.removeEventListener('offerNotification', handleHighlightedOffersUpdate);
+    };
   }, []);
 
   const fetchOffers = async () => {
@@ -94,15 +128,74 @@ const Offers = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {offers.map((offer, index) => {
-          const offerId = offer._id || index;
+          // Normalize offer ID - handle both _id and id, and convert to string
+          // MongoDB _id can be ObjectId or string, so we need to handle both
+          let offerId = offer._id || offer.id || index;
+          
+          // Convert ObjectId to string if needed
+          if (offerId && typeof offerId === 'object' && offerId.toString) {
+            offerId = offerId.toString();
+          }
+          const offerIdString = String(offerId);
+          
           const contentLength = getTextLength(offer.content);
           const shouldTruncate = contentLength > 200;
+          
+          // Check if this offer should be highlighted
+          // Try direct match first
+          let isHighlighted = highlightedOffers[offerIdString];
+          let highlightType = isHighlighted?.type || null;
+          
+          // If not found, try to match by checking all keys (in case of ID format mismatch)
+          if (!isHighlighted && Object.keys(highlightedOffers).length > 0) {
+            for (const [key, value] of Object.entries(highlightedOffers)) {
+              const keyStr = String(key);
+              const offerIdStr = String(offerIdString);
+              
+              // Try various matching strategies
+              if (keyStr === offerIdStr) {
+                isHighlighted = value;
+                highlightType = value?.type || null;
+                break;
+              }
+              
+              // Try matching ObjectId strings (remove any ObjectId wrapper)
+              const keyClean = keyStr.replace(/^ObjectId\(|\)$/g, '').replace(/"/g, '');
+              const offerIdClean = offerIdStr.replace(/^ObjectId\(|\)$/g, '').replace(/"/g, '');
+              if (keyClean === offerIdClean && keyClean.length > 0) {
+                isHighlighted = value;
+                highlightType = value?.type || null;
+                break;
+              }
+            }
+          }
+          
+          // Debug logging (can be removed later)
+          if (isHighlighted) {
+            console.log('[Offers] Found highlighted offer:', offerIdString, highlightType);
+          }
 
           return (
             <div
               key={offerId}
-              className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow overflow-hidden flex flex-col h-full"
+              className={`bg-white rounded-lg shadow-md hover:shadow-lg transition-all duration-300 overflow-hidden flex flex-col h-full relative ${
+                isHighlighted 
+                  ? highlightType === 'new_offer'
+                    ? 'ring-4 ring-green-400 ring-opacity-75 shadow-green-200 offer-highlight-pulse' 
+                    : 'ring-4 ring-blue-400 ring-opacity-75 shadow-blue-200 offer-updated-pulse'
+                  : ''
+              }`}
             >
+              {/* Highlight badge */}
+              {isHighlighted && (
+                <div className={`absolute top-2 right-2 z-10 px-2 py-1 rounded-full text-xs font-semibold text-white ${
+                  highlightType === 'new_offer' 
+                    ? 'bg-green-500' 
+                    : 'bg-blue-500'
+                }`}>
+                  {highlightType === 'new_offer' ? '🆕 New' : '🔄 Updated'}
+                </div>
+              )}
               {offer.image_url && (
                 <div className="w-full h-48 overflow-hidden flex-shrink-0">
                   <img

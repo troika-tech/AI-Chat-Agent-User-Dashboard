@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { API_BASE_URL, DEMO_MODE } from '../config/api.config';
 import { clearSession } from '../utils/sessionManager';
+import { handlePendingNotifications } from '../utils/notificationHandler';
 
 // API client is now configured via api.config.js
 // To change backend URL, edit src/config/api.config.js
@@ -30,13 +31,19 @@ api.interceptors.request.use(
   }
 );
 
-// Response interceptor - Handle 401 errors globally
+// Response interceptor - Handle 401 errors globally and pending notifications
 api.interceptors.response.use(
   (response) => {
     // Reset inactivity timer on successful API response (indicates active usage)
     if (window.dispatchEvent) {
       window.dispatchEvent(new CustomEvent('userActivity'));
     }
+    
+    // Check for pending notifications in the response
+    if (response.data) {
+      handlePendingNotifications(response.data);
+    }
+    
     return response;
   },
   (error) => {
