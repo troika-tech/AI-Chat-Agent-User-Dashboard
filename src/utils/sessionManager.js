@@ -76,8 +76,7 @@ export const broadcastNewLogin = (userId, sessionId) => {
     return;
   }
   
-  console.log('🔔 Broadcasting new login:', { userId: normalizedUserId, sessionId });
-  
+
   const message = {
     type: 'NEW_LOGIN',
     userId: normalizedUserId,
@@ -91,23 +90,22 @@ export const broadcastNewLogin = (userId, sessionId) => {
     try {
       // Send immediately
       channel.postMessage(message);
-      console.log('📡 Sent BroadcastChannel message:', message);
-      
+
       // Send again after delays to ensure other tabs receive it
       setTimeout(() => {
         channel.postMessage({ ...message, timestamp: Date.now() });
-        console.log('📡 Re-sent BroadcastChannel message (100ms delay)');
+
       }, 100);
       
       setTimeout(() => {
         channel.postMessage({ ...message, timestamp: Date.now() });
-        console.log('📡 Re-sent BroadcastChannel message (500ms delay)');
+
       }, 500);
     } catch (error) {
       console.error('❌ Error sending BroadcastChannel message:', error);
     }
   } else {
-    console.warn('⚠️ BroadcastChannel not available, using storage fallback only');
+
   }
   
   // Method 2: localStorage events (fallback for browsers without BroadcastChannel)
@@ -124,13 +122,11 @@ export const broadcastNewLogin = (userId, sessionId) => {
     // Change the value to trigger storage event (even if same data, use new timestamp)
     const newValue = JSON.stringify({ ...eventData, _trigger: Date.now() });
     localStorage.setItem(storageKey, newValue);
-    console.log('📦 Updated localStorage key:', storageKey, eventData);
-    
+
     // Also use timestamp-based keys as backup
     const eventKey = `new_login_${Date.now()}`;
     localStorage.setItem(eventKey, JSON.stringify(eventData));
-    console.log('📦 Created backup storage key:', eventKey);
-    
+
     // Clean up timestamp-based keys after a delay
     setTimeout(() => {
       try {
@@ -172,18 +168,10 @@ export const listenForNewLogin = (callback) => {
       const normalizedIncomingUserId = incomingUserId ? String(incomingUserId) : null;
       const normalizedCurrentUserId = currentUserId ? String(currentUserId) : null;
 
-      console.log('📨 Received NEW_LOGIN event via BroadcastChannel:', {
-        incomingUserId: normalizedIncomingUserId,
-        incomingSessionId,
-        incomingTimestamp: new Date(incomingTimestamp).toISOString(),
-        currentUserId: normalizedCurrentUserId,
-        currentSessionId,
-        isAuthenticated,
-      });
 
       // Only process if we're currently authenticated
       if (!isAuthenticated) {
-        console.log('ℹ️ Ignoring event - not currently authenticated');
+
         return;
       }
 
@@ -196,33 +184,21 @@ export const listenForNewLogin = (callback) => {
       const isDifferentSession = currentSessionId !== incomingSessionId;
       
       if (isSameUser && isDifferentSession) {
-        console.log('🚪 New login detected in another tab. Logging out current session...');
-        console.log('📊 Logout reason:', {
-          sameUser: true,
-          currentSessionId: currentSessionId || 'none (old session)',
-          incomingSessionId,
-          currentUserId: normalizedCurrentUserId,
-        });
+
         callback();
       } else {
-        console.log('ℹ️ Login event ignored:', {
-          sameUser: isSameUser,
-          sameSession: !isDifferentSession,
-          hasCurrentUserId: !!normalizedCurrentUserId,
-          hasIncomingUserId: !!normalizedIncomingUserId,
-          reason: !isSameUser ? 'different user' : 'same session',
-        });
+
       }
     };
 
     channel.addEventListener('message', handleMessage);
-    console.log('✅ BroadcastChannel listener attached');
+
     cleanupFunctions.push(() => {
       channel.removeEventListener('message', handleMessage);
-      console.log('🧹 BroadcastChannel listener removed');
+
     });
   } else {
-    console.warn('⚠️ BroadcastChannel not available');
+
   }
 
   // Fallback: Listen via storage events (for browsers without BroadcastChannel)
@@ -250,18 +226,10 @@ export const listenForNewLogin = (callback) => {
       const normalizedIncomingUserId = data.userId ? String(data.userId) : null;
       const normalizedCurrentUserId = currentUserId ? String(currentUserId) : null;
 
-      console.log('📦 Storage event received:', {
-        key: event.key,
-        incomingUserId: normalizedIncomingUserId,
-        incomingSessionId: data.sessionId,
-        currentUserId: normalizedCurrentUserId,
-        currentSessionId,
-        isAuthenticated,
-      });
 
       // Only process if we're currently authenticated
       if (!isAuthenticated) {
-        console.log('ℹ️ Ignoring storage event - not currently authenticated');
+
         return;
       }
 
@@ -271,20 +239,10 @@ export const listenForNewLogin = (callback) => {
       const isDifferentSession = currentSessionId !== data.sessionId;
       
       if (isSameUser && isDifferentSession) {
-        console.log('🚪 New login detected in another tab (via storage). Logging out current session...');
-        console.log('📊 Logout reason:', {
-          sameUser: true,
-          currentSessionId: currentSessionId || 'none (old session)',
-          incomingSessionId: data.sessionId,
-          currentUserId: normalizedCurrentUserId,
-        });
+
         callback();
       } else {
-        console.log('ℹ️ Storage event ignored:', {
-          sameUser: isSameUser,
-          sameSession: !isDifferentSession,
-          reason: !isSameUser ? 'different user' : 'same session',
-        });
+
       }
     } catch (error) {
       console.error('❌ Error parsing storage event:', error);
@@ -292,10 +250,10 @@ export const listenForNewLogin = (callback) => {
   };
 
   window.addEventListener('storage', handleStorageChange);
-  console.log('✅ Storage event listener attached');
+
   cleanupFunctions.push(() => {
     window.removeEventListener('storage', handleStorageChange);
-    console.log('🧹 Storage event listener removed');
+
   });
 
   // Return cleanup function
@@ -330,8 +288,7 @@ export const initializeSession = (userId) => {
   // Generate and set session ID
   const sessionId = generateSessionId();
   setSessionId(sessionId);
-  console.log('✅ Session ID set in localStorage:', sessionId);
-  
+
   // Broadcast immediately to all tabs
   broadcastNewLogin(normalizedUserId, sessionId);
   

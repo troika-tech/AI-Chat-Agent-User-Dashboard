@@ -177,7 +177,7 @@ const CallRecording = () => {
 
   const handleDownload = (recording) => {
     // Implement download functionality
-    console.log('Downloading:', recording);
+
   };
 
   const getStatusBadge = (status) => {

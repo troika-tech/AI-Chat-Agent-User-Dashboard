@@ -116,7 +116,7 @@ const CampaignReportDetail = () => {
         };
         setStats(stats);
         } catch (callErr) {
-          console.warn('Error fetching call logs:', callErr);
+
         setCallLogs([]);
         setStats({
           totalNumbers: campaignData.phoneNumbers?.length || 0,

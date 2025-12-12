@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import {
   FaPhoneAlt,
@@ -18,6 +18,8 @@ import {
   FaHandshake,
   FaFileDownload,
   FaFire,
+  FaChevronDown,
+  FaCheck,
 } from 'react-icons/fa';
 import { authAPI } from '../services/api';
 
@@ -33,19 +35,19 @@ const FollowUpLeads = () => {
   const [showContacted, setShowContacted] = useState('all');
   const [pagination, setPagination] = useState({ page: 1, limit: 20, total: 0, pages: 0 });
   const [lastUpdated, setLastUpdated] = useState(null);
-  
+
   // Chat modal state
   const [sessionModalOpen, setSessionModalOpen] = useState(false);
   const [selectedSession, setSelectedSession] = useState(null);
   const [sessionMessages, setSessionMessages] = useState([]);
   const [sessionLoading, setSessionLoading] = useState(false);
-  
+
   // Notes modal state
   const [notesModalOpen, setNotesModalOpen] = useState(false);
   const [selectedLead, setSelectedLead] = useState(null);
   const [notesText, setNotesText] = useState('');
   const [savingNotes, setSavingNotes] = useState(false);
-  
+
   // Export modal state
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportingAll, setExportingAll] = useState(false);
@@ -53,6 +55,12 @@ const FollowUpLeads = () => {
   const [keywordsWithData, setKeywordsWithData] = useState([]);
   const [keywordCounts, setKeywordCounts] = useState({});
   const [loadingKeywords, setLoadingKeywords] = useState(false);
+
+  // Custom dropdown state
+  const [showStatusDropdown, setShowStatusDropdown] = useState(false);
+  const [showDateDropdown, setShowDateDropdown] = useState(false);
+  const statusDropdownRef = useRef(null);
+  const dateDropdownRef = useRef(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -92,6 +100,20 @@ const FollowUpLeads = () => {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (statusDropdownRef.current && !statusDropdownRef.current.contains(event.target)) {
+        setShowStatusDropdown(false);
+      }
+      if (dateDropdownRef.current && !dateDropdownRef.current.contains(event.target)) {
+        setShowDateDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Handle marking as contacted
   const handleToggleContacted = async (lead) => {
@@ -442,6 +464,45 @@ const FollowUpLeads = () => {
     return `Session ${lead.session_id?.slice(-6) || 'Unknown'}`;
   };
 
+  // Get status dropdown label
+  const getStatusLabel = () => {
+    switch (showContacted) {
+      case 'pending': return 'Pending';
+      case 'contacted': return 'Contacted';
+      default: return 'All Status';
+    }
+  };
+
+  // Get date range label
+  const getDateRangeLabel = () => {
+    if (dateRange === 'custom' && dateFrom && dateTo) {
+      return `${new Date(dateFrom).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${new Date(dateTo).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+    }
+    switch (dateRange) {
+      case '7days': return 'Last 7 Days';
+      case '30days': return 'Last 30 Days';
+      case '90days': return 'Last 90 Days';
+      case 'custom': return 'Custom Range';
+      default: return 'All Time';
+    }
+  };
+
+  // Handle status select
+  const handleStatusSelect = (status) => {
+    setShowContacted(status);
+    setPagination(prev => ({ ...prev, page: 1 }));
+    setShowStatusDropdown(false);
+  };
+
+  // Handle date range select
+  const handleDateRangeSelect = (range) => {
+    setDateRange(range);
+    setPagination(prev => ({ ...prev, page: 1 }));
+    if (range !== 'custom') {
+      setShowDateDropdown(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -521,7 +582,7 @@ const FollowUpLeads = () => {
       </div>
 
       {/* Filters */}
-      <div className="glass-card p-4 rounded-xl border border-zinc-200 bg-white">
+      <div className="glass-card p-4 rounded-xl border border-zinc-200 bg-white relative z-20">
         <div className="flex flex-col md:flex-row gap-4">
           {/* Search */}
           <div className="flex-1 relative">
@@ -537,53 +598,132 @@ const FollowUpLeads = () => {
               className="w-full pl-10 pr-4 py-2 border border-zinc-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
             />
           </div>
-          
-          {/* Status Filter */}
-          <select
-            value={showContacted}
-            onChange={(e) => {
-              setShowContacted(e.target.value);
-              setPagination(prev => ({ ...prev, page: 1 }));
-            }}
-            className="px-3 py-2 border border-zinc-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white"
-          >
-            <option value="all">All Status</option>
-            <option value="pending">Pending</option>
-            <option value="contacted">Contacted</option>
-          </select>
 
-          {/* Date Range */}
-          <select
-            value={dateRange}
-            onChange={(e) => {
-              setDateRange(e.target.value);
-              setPagination(prev => ({ ...prev, page: 1 }));
-            }}
-            className="px-3 py-2 border border-zinc-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white"
-          >
-            <option value="7days">Last 7 Days</option>
-            <option value="30days">Last 30 Days</option>
-            <option value="90days">Last 90 Days</option>
-            <option value="all">All Time</option>
-            <option value="custom">Custom Range</option>
-          </select>
+          {/* Custom Status Dropdown */}
+          <div className="relative z-30" ref={statusDropdownRef}>
+            <button
+              onClick={() => setShowStatusDropdown(!showStatusDropdown)}
+              className="w-full md:w-auto min-w-[140px] px-3 py-2 pr-8 border border-zinc-200 rounded-lg bg-white text-zinc-900 hover:border-zinc-300 focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm text-left transition-colors"
+            >
+              {getStatusLabel()}
+            </button>
+            <FaChevronDown className={`absolute right-3 top-1/2 transform -translate-y-1/2 text-zinc-400 pointer-events-none transition-transform ${showStatusDropdown ? 'rotate-180' : ''}`} size={12} />
 
-          {dateRange === 'custom' && (
-            <>
-              <input
-                type="date"
-                value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
-                className="px-3 py-2 border border-zinc-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
-              />
-              <input
-                type="date"
-                value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
-                className="px-3 py-2 border border-zinc-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
-              />
-            </>
-          )}
+            {showStatusDropdown && (
+              <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-zinc-200 rounded-lg shadow-xl z-[100] overflow-hidden">
+                <div className="p-2">
+                  {[
+                    { value: 'all', label: 'All Status' },
+                    { value: 'pending', label: 'Pending' },
+                    { value: 'contacted', label: 'Contacted' },
+                  ].map((option) => (
+                    <button
+                      key={option.value}
+                      onClick={() => handleStatusSelect(option.value)}
+                      className={`w-full px-3 py-2 text-left text-sm rounded-md hover:bg-zinc-50 transition-colors flex items-center justify-between ${
+                        showContacted === option.value
+                          ? 'bg-purple-50 text-purple-700 font-medium'
+                          : 'text-zinc-700'
+                      }`}
+                    >
+                      <span>{option.label}</span>
+                      {showContacted === option.value && (
+                        <FaCheck className="text-purple-500" size={10} />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Custom Date Range Dropdown */}
+          <div className="relative z-30" ref={dateDropdownRef}>
+            <button
+              onClick={() => setShowDateDropdown(!showDateDropdown)}
+              className="w-full md:w-auto min-w-[140px] px-3 py-2 pr-8 border border-zinc-200 rounded-lg bg-white text-zinc-900 hover:border-zinc-300 focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm text-left transition-colors"
+            >
+              {getDateRangeLabel()}
+            </button>
+            <FaChevronDown className={`absolute right-3 top-1/2 transform -translate-y-1/2 text-zinc-400 pointer-events-none transition-transform ${showDateDropdown ? 'rotate-180' : ''}`} size={12} />
+
+            {showDateDropdown && (
+              <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-zinc-200 rounded-lg shadow-xl z-[100] overflow-hidden min-w-[280px]">
+                {/* Quick Select Options */}
+                <div className="p-2">
+                  {[
+                    { value: '7days', label: 'Last 7 Days' },
+                    { value: '30days', label: 'Last 30 Days' },
+                    { value: '90days', label: 'Last 90 Days' },
+                    { value: 'all', label: 'All Time' },
+                  ].map((option) => (
+                    <button
+                      key={option.value}
+                      onClick={() => handleDateRangeSelect(option.value)}
+                      className={`w-full px-3 py-2 text-left text-sm rounded-md hover:bg-zinc-50 transition-colors flex items-center justify-between ${
+                        dateRange === option.value && !(dateRange === 'custom' && dateFrom && dateTo)
+                          ? 'bg-purple-50 text-purple-700 font-medium'
+                          : 'text-zinc-700'
+                      }`}
+                    >
+                      <span>{option.label}</span>
+                      {dateRange === option.value && !(dateRange === 'custom' && dateFrom && dateTo) && (
+                        <FaCheck className="text-purple-500" size={10} />
+                      )}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Divider */}
+                <div className="border-t border-zinc-200"></div>
+
+                {/* Custom Date Range */}
+                <div className="p-3 bg-zinc-50">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-zinc-700">Custom Range</span>
+                    {dateRange === 'custom' && dateFrom && dateTo && (
+                      <FaCheck className="text-purple-500" size={10} />
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <div>
+                      <label className="block text-[10px] font-medium text-zinc-600 mb-1">From Date</label>
+                      <input
+                        type="date"
+                        value={dateFrom}
+                        onChange={(e) => {
+                          setDateFrom(e.target.value);
+                          setDateRange('custom');
+                        }}
+                        className="w-full px-2 py-1.5 border border-zinc-200 rounded-md bg-white text-zinc-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-medium text-zinc-600 mb-1">To Date</label>
+                      <input
+                        type="date"
+                        value={dateTo}
+                        onChange={(e) => {
+                          setDateTo(e.target.value);
+                          setDateRange('custom');
+                        }}
+                        min={dateFrom}
+                        className="w-full px-2 py-1.5 border border-zinc-200 rounded-md bg-white text-zinc-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent text-xs"
+                      />
+                    </div>
+                    {dateFrom && dateTo && (
+                      <button
+                        onClick={() => setShowDateDropdown(false)}
+                        className="w-full mt-2 px-3 py-1.5 bg-purple-500 hover:bg-purple-600 text-white rounded-md text-xs font-medium transition-colors"
+                      >
+                        Apply
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Export Button */}
           <div className="flex items-center">

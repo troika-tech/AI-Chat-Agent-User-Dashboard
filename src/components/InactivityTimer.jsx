@@ -22,11 +22,10 @@ const InactivityTimer = () => {
     const isAuthenticated = localStorage.getItem('authToken');
     
     if (!isAuthenticated) {
-      console.log('⏱️ InactivityTimer: User not authenticated, skipping setup');
+
       return;
     }
 
-    console.log('⏱️ InactivityTimer: Setting up 30-minute inactivity timer');
 
     // Create activity tracker with 30-minute timeout
     const tracker = createActivityTracker({
@@ -41,8 +40,7 @@ const InactivityTimer = () => {
       },
       
       onInactive: () => {
-        console.log('⏱️ InactivityTimer: 30 minutes of inactivity detected - logging out');
-        
+
         // Clear session
         clearSession();
         
@@ -125,8 +123,7 @@ const InactivityTimer = () => {
 
     // Cleanup function
     return () => {
-      console.log('⏱️ InactivityTimer: Cleaning up');
-      
+
       // Clear warning check interval
       if (warningIntervalRef.current) {
         clearInterval(warningIntervalRef.current);

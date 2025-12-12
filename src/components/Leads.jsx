@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { FaSearch, FaPhone, FaEnvelope, FaUser, FaSpinner, FaComments, FaTimesCircle, FaSortUp, FaSortDown, FaFire, FaCalendar, FaFileDownload } from 'react-icons/fa';
+import React, { useState, useEffect, useRef } from 'react';
+import { FaSearch, FaPhone, FaEnvelope, FaUser, FaSpinner, FaComments, FaTimesCircle, FaSortUp, FaSortDown, FaFire, FaCalendar, FaFileDownload, FaChevronDown, FaCheck } from 'react-icons/fa';
 import { authAPI } from '../services/api';
 import { DEMO_MODE } from '../config/api.config';
 
@@ -12,6 +12,8 @@ const Leads = () => {
   const [filters, setFilters] = useState({
     search: '',
     dateRange: 'all',
+    customStartDate: '',
+    customEndDate: '',
   });
   const [dateSortOrder, setDateSortOrder] = useState('desc');
   const [showChatModal, setShowChatModal] = useState(false);
@@ -24,10 +26,12 @@ const Leads = () => {
   const [keywordCounts, setKeywordCounts] = useState({});
   const [loadingKeywords, setLoadingKeywords] = useState(false);
   const [selectedKeywords, setSelectedKeywords] = useState([]);
+  const [showDateDropdown, setShowDateDropdown] = useState(false);
+  const dateDropdownRef = useRef(null);
 
   useEffect(() => {
     fetchHotLeads();
-  }, [pagination.page, filters.dateRange, selectedKeywords]);
+  }, [pagination.page, filters.dateRange, filters.customStartDate, filters.customEndDate, selectedKeywords]);
 
   // Debounce search
   useEffect(() => {
@@ -41,17 +45,36 @@ const Leads = () => {
     return () => clearTimeout(timer);
   }, [filters.search]);
 
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dateDropdownRef.current && !dateDropdownRef.current.contains(event.target)) {
+        setShowDateDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const fetchHotLeads = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      const response = await authAPI.getHotLeads({
+      const requestParams = {
         page: pagination.page,
         limit: pagination.limit,
         searchTerm: filters.search,
         dateRange: filters.dateRange,
-      });
+      };
+
+      // Add custom date range if selected
+      if (filters.dateRange === 'custom' && filters.customStartDate && filters.customEndDate) {
+        requestParams.startDate = filters.customStartDate;
+        requestParams.endDate = filters.customEndDate;
+      }
+
+      const response = await authAPI.getHotLeads(requestParams);
 
       if (response.success) {
         let leadsList = response.data?.leads || [];
@@ -145,12 +168,20 @@ const Leads = () => {
 
     while (hasMore) {
       try {
-        const response = await authAPI.getHotLeads({
+        const requestParams = {
           page: currentPage,
           limit: limit,
           searchTerm: filters.search,
           dateRange: filters.dateRange,
-        });
+        };
+
+        // Add custom date range if selected
+        if (filters.dateRange === 'custom' && filters.customStartDate && filters.customEndDate) {
+          requestParams.startDate = filters.customStartDate;
+          requestParams.endDate = filters.customEndDate;
+        }
+
+        const response = await authAPI.getHotLeads(requestParams);
 
         if (response.success && response.data?.leads) {
           let leadsList = response.data.leads;
@@ -371,12 +402,32 @@ const Leads = () => {
   const handleSortToggle = () => {
     const newOrder = dateSortOrder === 'desc' ? 'asc' : 'desc';
     setDateSortOrder(newOrder);
-    
+
     setLeads(prev => [...prev].sort((a, b) => {
       const dateA = new Date(a.lastDetectedAt || 0).getTime();
       const dateB = new Date(b.lastDetectedAt || 0).getTime();
       return newOrder === 'desc' ? dateB - dateA : dateA - dateB;
     }));
+  };
+
+  const getDateRangeLabel = () => {
+    if (filters.dateRange === 'custom' && filters.customStartDate && filters.customEndDate) {
+      return `${new Date(filters.customStartDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${new Date(filters.customEndDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+    }
+    switch (filters.dateRange) {
+      case '7days': return 'Last 7 days';
+      case '30days': return 'Last 30 days';
+      case '90days': return 'Last 90 days';
+      case 'custom': return 'Custom';
+      default: return 'All time';
+    }
+  };
+
+  const handleDateRangeSelect = (range) => {
+    setFilters({ ...filters, dateRange: range });
+    if (range !== 'custom') {
+      setShowDateDropdown(false);
+    }
   };
 
   if (loading && leads.length === 0) {
@@ -514,19 +565,94 @@ const Leads = () => {
               className="w-full pl-10 pr-4 py-2 border border-zinc-200 rounded-lg bg-white text-zinc-900 focus:ring-2 focus:ring-emerald-500/60 focus:border-emerald-400 text-xs"
             />
           </div>
-          <div className="relative">
-            <FaCalendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-zinc-400" size={14} />
-            <select
-              value={filters.dateRange}
-              onChange={(e) => setFilters({ ...filters, dateRange: e.target.value })}
-              className="w-full pl-10 pr-4 py-2 border border-zinc-200 rounded-lg bg-white text-zinc-900 focus:ring-2 focus:ring-emerald-500/60 focus:border-emerald-400 text-xs appearance-none"
+
+          {/* Custom Date Dropdown */}
+          <div className="relative z-30" ref={dateDropdownRef}>
+            <FaCalendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-zinc-400 z-10 pointer-events-none" size={14} />
+            <button
+              onClick={() => setShowDateDropdown(!showDateDropdown)}
+              className="w-full pl-10 pr-10 py-2 border border-zinc-200 rounded-lg bg-white text-zinc-900 hover:border-zinc-300 focus:ring-2 focus:ring-emerald-500/60 focus:border-emerald-400 text-xs text-left transition-colors"
             >
-              <option value="7days">Last 7 days</option>
-              <option value="30days">Last 30 days</option>
-              <option value="90days">Last 90 days</option>
-              <option value="all">All time</option>
-            </select>
+              {getDateRangeLabel()}
+            </button>
+            <FaChevronDown className={`absolute right-3 top-1/2 transform -translate-y-1/2 text-zinc-400 pointer-events-none transition-transform ${showDateDropdown ? 'rotate-180' : ''}`} size={12} />
+
+            {showDateDropdown && (
+              <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-zinc-200 rounded-lg shadow-xl z-[100] overflow-hidden">
+                {/* Quick Select Options */}
+                <div className="p-2">
+                  {[
+                    { value: '7days', label: 'Last 7 days' },
+                    { value: '30days', label: 'Last 30 days' },
+                    { value: '90days', label: 'Last 90 days' },
+                    { value: 'all', label: 'All time' },
+                  ].map((option) => (
+                    <button
+                      key={option.value}
+                      onClick={() => handleDateRangeSelect(option.value)}
+                      className={`w-full px-3 py-2 text-left text-xs rounded-md hover:bg-zinc-50 transition-colors flex items-center justify-between ${
+                        filters.dateRange === option.value && !(filters.dateRange === 'custom' && filters.customStartDate && filters.customEndDate)
+                          ? 'bg-orange-50 text-orange-700 font-medium'
+                          : 'text-zinc-700'
+                      }`}
+                    >
+                      <span>{option.label}</span>
+                      {filters.dateRange === option.value && !(filters.dateRange === 'custom' && filters.customStartDate && filters.customEndDate) && (
+                        <FaCheck className="text-orange-500" size={10} />
+                      )}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Divider */}
+                <div className="border-t border-zinc-200"></div>
+
+                {/* Custom Date Range */}
+                <div className="p-3 bg-zinc-50">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-medium text-zinc-700">Custom Range</span>
+                    {filters.dateRange === 'custom' && filters.customStartDate && filters.customEndDate && (
+                      <FaCheck className="text-orange-500" size={10} />
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <div>
+                      <label className="block text-[10px] font-medium text-zinc-600 mb-1">Start Date</label>
+                      <input
+                        type="date"
+                        value={filters.customStartDate}
+                        onChange={(e) => {
+                          setFilters({ ...filters, dateRange: 'custom', customStartDate: e.target.value });
+                        }}
+                        className="w-full px-2 py-1.5 border border-zinc-200 rounded-md bg-white text-zinc-900 focus:ring-2 focus:ring-emerald-500/60 focus:border-emerald-400 text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-medium text-zinc-600 mb-1">End Date</label>
+                      <input
+                        type="date"
+                        value={filters.customEndDate}
+                        onChange={(e) => {
+                          setFilters({ ...filters, dateRange: 'custom', customEndDate: e.target.value });
+                        }}
+                        min={filters.customStartDate}
+                        className="w-full px-2 py-1.5 border border-zinc-200 rounded-md bg-white text-zinc-900 focus:ring-2 focus:ring-emerald-500/60 focus:border-emerald-400 text-xs"
+                      />
+                    </div>
+                    {filters.customStartDate && filters.customEndDate && (
+                      <button
+                        onClick={() => setShowDateDropdown(false)}
+                        className="w-full mt-2 px-3 py-1.5 bg-orange-500 hover:bg-orange-600 text-white rounded-md text-xs font-medium transition-colors"
+                      >
+                        Apply
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
+
           <div className="flex items-center">
             <button
               onClick={handleOpenExportModal}

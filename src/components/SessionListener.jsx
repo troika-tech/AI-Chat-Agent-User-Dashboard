@@ -24,19 +24,15 @@ const SessionListener = () => {
     
     if (isAuthenticated) {
       if (!currentSessionId && currentUserId) {
-        console.log('🔧 SessionListener: No session ID found, creating one for existing session');
+
         const newSessionId = generateSessionId();
         setSessionId(newSessionId);
-        console.log('✅ Created session ID for existing session:', newSessionId);
+
       }
 
-      console.log('👂 SessionListener: Setting up cross-tab login listener');
-      console.log('👤 Current session info:', { 
-        userId: currentUserId, 
-        sessionId: currentSessionId || getCurrentSessionId() || 'none (created new)' 
-      });
+
     } else {
-      console.log('👂 SessionListener: User not authenticated, listener will activate on login');
+
     }
 
     // Set up listener for cross-tab login events (always active)
@@ -44,12 +40,11 @@ const SessionListener = () => {
       // Only process if currently authenticated
       const stillAuthenticated = localStorage.getItem('authToken');
       if (!stillAuthenticated) {
-        console.log('ℹ️ SessionListener: Already logged out, ignoring event');
+
         return;
       }
 
-      console.log('🚪 SessionListener: Logout callback triggered - New login detected in another tab');
-      
+
       // Clear session data
       clearSession();
       

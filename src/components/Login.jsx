@@ -53,16 +53,13 @@ const Login = () => {
 
         // Initialize session and broadcast new login to other tabs IMMEDIATELY
         const userId = response.data.user.id || response.data.user._id;
-        console.log('🔐 Login successful, user data:', response.data.user);
-        console.log('🆔 Extracted user ID:', userId);
-        
+
         if (userId) {
           // Initialize session immediately (no delay needed)
           const sessionId = initializeSession(String(userId));
-          console.log('✅ Session initialized with ID:', sessionId);
-          console.log('📡 Broadcasting new login to all tabs...');
+
         } else {
-          console.warn('⚠️ No user ID found in response');
+
         }
 
         toast.success('Login successful!');

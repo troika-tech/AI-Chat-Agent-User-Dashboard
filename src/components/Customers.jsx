@@ -253,11 +253,36 @@ const Customers = () => {
     setSelectedCustomer(customer);
     setShowChatModal(true);
     setChatLoading(true);
-    
+
     try {
-      const response = await authAPI.getMessages({ phone: customer.phone });
+      const response = await authAPI.getChatHistory({
+        phone: customer.phone
+      });
       if (response?.success) {
-        setChatMessages(response.data?.messages || []);
+        const messages = response.data?.messages || [];
+        
+        // Check for duplicates (same ID or same content+timestamp)
+        const messageIds = new Set();
+        const duplicateIds = [];
+        const duplicateContent = [];
+        messages.forEach((m, i) => {
+          const msgId = String(m._id || m.id || i);
+          if (messageIds.has(msgId)) {
+            duplicateIds.push({idx: i, id: msgId});
+          } else {
+            messageIds.add(msgId);
+          }
+          // Check for duplicate content with same timestamp
+          if (i > 0) {
+            const prev = messages[i - 1];
+            if (prev.content === m.content && prev.timestamp === m.timestamp && prev.sender === m.sender) {
+              duplicateContent.push({idx: i, prevIdx: i - 1});
+            }
+          }
+        });
+        
+
+        setChatMessages(messages);
       }
     } catch (err) {
       console.error('Error fetching chat messages:', err);
@@ -445,7 +470,7 @@ const Customers = () => {
                     {selectedCustomer?.phone}
                   </h3>
                   <p className="text-emerald-100 text-xs">
-                    {chatMessages.length} messages • First: {formatDate(selectedCustomer?.firstContact)}
+                    {selectedCustomer?.messageCount || chatMessages.length} messages • First: {formatDate(selectedCustomer?.firstContact)}
                   </p>
                 </div>
               </div>
@@ -458,7 +483,7 @@ const Customers = () => {
             </div>
 
             {/* Chat Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-zinc-50">
+            <div className="flex-1 overflow-y-auto p-4 bg-zinc-50">
               {chatLoading ? (
                 <div className="flex items-center justify-center py-12">
                   <FaSpinner className="animate-spin text-emerald-500" size={32} />
@@ -469,43 +494,45 @@ const Customers = () => {
                   <p>No messages found</p>
                 </div>
               ) : (
-                chatMessages.map((msg, idx) => (
-                  <div
-                    key={idx}
-                    className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
-                  >
-                    <div className={`max-w-[80%] ${msg.sender === 'user' ? 'order-2' : 'order-1'}`}>
-                      <div className="flex items-center gap-2 mb-1">
-                        <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
-                          msg.sender === 'user' ? 'bg-blue-100 text-blue-600' : 'bg-emerald-100 text-emerald-600'
-                        }`}>
-                          {msg.sender === 'user' ? <FaUser size={12} /> : <FaRobot size={12} />}
+                chatMessages.map((msg, idx) => {
+                  return (
+                    <div
+                      key={msg._id || msg.id || idx}
+                      className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'} mt-4`}
+                    >
+                      <div className={`max-w-[80%] ${msg.sender === 'user' ? 'order-2' : 'order-1'}`}>
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
+                            msg.sender === 'user' ? 'bg-blue-100 text-blue-600' : 'bg-emerald-100 text-emerald-600'
+                          }`}>
+                            {msg.sender === 'user' ? <FaUser size={12} /> : <FaRobot size={12} />}
+                          </div>
+                          <span className="text-xs text-zinc-500">
+                            {msg.sender === 'user' ? 'User' : 'Bot'} • {formatDate(msg.timestamp)}
+                          </span>
                         </div>
-                        <span className="text-xs text-zinc-500">
-                          {msg.sender === 'user' ? 'User' : 'Bot'} • {formatDate(msg.timestamp)}
-                        </span>
-                      </div>
-                      <div className={`p-3 rounded-xl ${
-                        msg.sender === 'user'
-                          ? 'bg-blue-600 text-white rounded-tr-sm'
-                          : 'bg-white border border-zinc-200 text-zinc-800 rounded-tl-sm'
-                      }`}>
-                        <div className={`text-sm prose prose-sm max-w-none ${
-                          msg.sender === 'user' ? 'prose-invert' : '[&_strong]:text-zinc-700 [&_strong]:font-semibold'
+                        <div className={`p-3 rounded-xl ${
+                          msg.sender === 'user'
+                            ? 'bg-blue-600 text-white rounded-tr-sm rounded-br-lg rounded-bl-lg'
+                            : 'bg-white border border-zinc-200 text-zinc-800 rounded-tl-sm rounded-bl-lg rounded-br-lg'
                         }`}>
-                          <ReactMarkdown>{msg.content || ''}</ReactMarkdown>
+                          <div className={`text-sm prose prose-sm max-w-none ${
+                            msg.sender === 'user' ? 'prose-invert' : '[&_strong]:text-zinc-700 [&_strong]:font-semibold'
+                          }`}>
+                            <ReactMarkdown>{msg.content || ''}</ReactMarkdown>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
 
             {/* Modal Footer */}
             <div className="px-6 py-3 border-t border-zinc-200 bg-zinc-50/80 rounded-b-2xl">
               <p className="text-xs text-zinc-500 text-center">
-                Total {chatMessages.length} messages from this customer
+                Total {selectedCustomer?.messageCount || chatMessages.length} messages from this customer
               </p>
             </div>
           </div>

@@ -363,8 +363,7 @@ const ChatHistory = () => {
   const groupMessagesBySession = (messages) => {
     const groups = {};
     
-    console.log('🔍 [Guest Numbering] Starting to group messages:', messages.length);
-    
+
     // First pass: Group all messages and identify guests
     messages.forEach(message => {
       const sessionId = message.session_id || message.contact || 'unknown';
@@ -408,7 +407,7 @@ const ChatHistory = () => {
     const guestSessionMap = {}; // Map to track guest numbers by session_id
     guestSessions.forEach((group, index) => {
       guestSessionMap[group.session_id] = index + 1; // Guest 1, Guest 2, etc.
-      console.log(`👤 [Guest Numbering] Assigned Guest ${index + 1} to session_id: ${group.session_id} (first message: ${new Date(group.firstMessageDate).toLocaleString()})`);
+
     });
     
     // Third pass: Assign contact display names
@@ -437,7 +436,7 @@ const ChatHistory = () => {
       }
       
       group.contact = contactDisplay;
-      console.log(`📝 [Guest Numbering] Final contact display for ${group.session_id}: ${contactDisplay}`);
+
     });
     
     const groupedArray = Object.values(groups).map(group => ({
@@ -445,23 +444,7 @@ const ChatHistory = () => {
       messages: group.messages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp)),
     })).sort((a, b) => new Date(b.lastMessageDate) - new Date(a.lastMessageDate));
     
-    console.log('✅ [Guest Numbering] Grouping complete:', {
-      totalGroups: groupedArray.length,
-      guestGroups: groupedArray.filter(g => g.is_guest).length,
-      guestMap: guestSessionMap,
-      guestOrder: guestSessions.map(g => ({ 
-        session_id: g.session_id, 
-        guestNumber: guestSessionMap[g.session_id],
-        firstMessage: new Date(g.firstMessageDate).toLocaleString()
-      })),
-      groups: groupedArray.map(g => ({ 
-        contact: g.contact, 
-        session_id: g.session_id, 
-        messageCount: g.messages.length,
-        isGuest: g.is_guest 
-      }))
-    });
-    
+
     return groupedArray;
   };
 

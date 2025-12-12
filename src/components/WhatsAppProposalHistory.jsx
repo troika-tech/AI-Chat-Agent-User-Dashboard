@@ -65,13 +65,11 @@ const WhatsAppProposalHistory = () => {
 
       const response = await authAPI.getWhatsAppProposalHistory(params);
       
-      console.log('WhatsApp proposal history response:', response);
-      
+
       if (response?.success) {
         let proposalList = response.data?.proposals || [];
         
-        console.log('Proposal list from API:', proposalList);
-        
+
         // Apply search filter if query exists
         if (searchQuery) {
           const query = searchQuery.toLowerCase();

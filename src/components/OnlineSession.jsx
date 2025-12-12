@@ -73,7 +73,7 @@ const OnlineSession = () => {
       oscillator.start();
       oscillator.stop(ctx.currentTime + 0.25);
     } catch (err) {
-      console.warn('Notification sound failed:', err);
+
     }
   };
 

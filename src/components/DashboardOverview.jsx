@@ -22,6 +22,7 @@ const DashboardOverview = () => {
   const [planData, setPlanData] = useState(null);
   const [error, setError] = useState(null);
   const [topChats, setTopChats] = useState([]);
+  const [topChatsLoading, setTopChatsLoading] = useState(true);
   const [selectedChat, setSelectedChat] = useState(null);
   const [showChatModal, setShowChatModal] = useState(false);
   const [chatsChartData, setChatsChartData] = useState([]);
@@ -45,30 +46,30 @@ const DashboardOverview = () => {
       const results = await Promise.allSettled([
         // GET /api/user/usage - Returns { total_messages, unique_users, last_activity }
         authAPI.getUserUsage().catch(err => {
-          console.warn('Usage data not available:', err);
+
           return null;
         }),
         // GET /api/user/plan - Returns plan info with expiry date
         authAPI.getUserPlan().catch(err => {
-          console.warn('Plan data not available:', err);
+
           return null;
         }),
       ]);
 
       // Set usage data
       if (results[0].status === 'fulfilled' && results[0].value) {
-        console.log('Usage data received:', results[0].value);
+
         setUsageData(results[0].value.data);
       } else {
-        console.warn('Usage data not received:', results[0]);
+
       }
 
       // Set plan data
       if (results[1].status === 'fulfilled' && results[1].value) {
-        console.log('Plan data received:', results[1].value);
+
         setPlanData(results[1].value.data);
       } else {
-        console.warn('Plan data not received:', results[1]);
+
       }
 
     } catch (err) {
@@ -229,7 +230,7 @@ const DashboardOverview = () => {
         setVisitorsChartData(chartData);
       }
     } catch (err) {
-      console.warn('Failed to fetch chart data:', err);
+
       setChatsChartData([]);
       setVisitorsChartData([]);
     }
@@ -237,61 +238,67 @@ const DashboardOverview = () => {
 
   // Fetch top chats data
   const fetchTopChats = async () => {
-    if (DEMO_MODE) {
-      // Mock data for top chats
-      const mockTopChats = [
-        {
-          id: 'chat-1',
-          visitorName: 'Sarah Johnson',
-          visitorId: 'visitor-001',
-          lastMessage: 'Thank you so much for your help! This is exactly what I needed.',
-          messageCount: 24,
-          duration: 1245, // seconds
-          status: 'completed',
-          timestamp: new Date(Date.now() - 3600000).toISOString(), // 1 hour ago
-          sentiment: 'positive',
-        },
-        {
-          id: 'chat-2',
-          visitorName: 'Michael Chen',
-          visitorId: 'visitor-002',
-          lastMessage: 'Can you send me more details about the pricing plans?',
-          messageCount: 18,
-          duration: 892,
-          status: 'active',
-          timestamp: new Date(Date.now() - 1800000).toISOString(), // 30 mins ago
-          sentiment: 'neutral',
-        },
-        {
-          id: 'chat-3',
-          visitorName: 'Emily Rodriguez',
-          visitorId: 'visitor-003',
-          lastMessage: 'I\'m having trouble with my account login. Can you help?',
-          messageCount: 31,
-          duration: 1567,
-          status: 'completed',
-          timestamp: new Date(Date.now() - 7200000).toISOString(), // 2 hours ago
-          sentiment: 'neutral',
-        },
-        {
-          id: 'chat-4',
-          visitorName: 'David Kim',
-          visitorId: 'visitor-004',
-          lastMessage: 'Great! I\'ll proceed with the premium plan then.',
-          messageCount: 15,
-          duration: 678,
-          status: 'completed',
-          timestamp: new Date(Date.now() - 5400000).toISOString(), // 1.5 hours ago
-          sentiment: 'positive',
-        },
-      ];
-      setTopChats(mockTopChats);
-      return;
-    }
-    
-    // Fetch real sessions from backend
     try {
+      setTopChatsLoading(true);
+      
+      if (DEMO_MODE) {
+        // Simulate network delay for demo mode
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Mock data for top chats
+        const mockTopChats = [
+          {
+            id: 'chat-1',
+            visitorName: 'Sarah Johnson',
+            visitorId: 'visitor-001',
+            lastMessage: 'Thank you so much for your help! This is exactly what I needed.',
+            messageCount: 24,
+            duration: 1245, // seconds
+            status: 'completed',
+            timestamp: new Date(Date.now() - 3600000).toISOString(), // 1 hour ago
+            sentiment: 'positive',
+          },
+          {
+            id: 'chat-2',
+            visitorName: 'Michael Chen',
+            visitorId: 'visitor-002',
+            lastMessage: 'Can you send me more details about the pricing plans?',
+            messageCount: 18,
+            duration: 892,
+            status: 'active',
+            timestamp: new Date(Date.now() - 1800000).toISOString(), // 30 mins ago
+            sentiment: 'neutral',
+          },
+          {
+            id: 'chat-3',
+            visitorName: 'Emily Rodriguez',
+            visitorId: 'visitor-003',
+            lastMessage: 'I\'m having trouble with my account login. Can you help?',
+            messageCount: 31,
+            duration: 1567,
+            status: 'completed',
+            timestamp: new Date(Date.now() - 7200000).toISOString(), // 2 hours ago
+            sentiment: 'neutral',
+          },
+          {
+            id: 'chat-4',
+            visitorName: 'David Kim',
+            visitorId: 'visitor-004',
+            lastMessage: 'Great! I\'ll proceed with the premium plan then.',
+            messageCount: 15,
+            duration: 678,
+            status: 'completed',
+            timestamp: new Date(Date.now() - 5400000).toISOString(), // 1.5 hours ago
+            sentiment: 'positive',
+          },
+        ];
+        setTopChats(mockTopChats);
+        return;
+      }
+      
+      // Fetch real sessions from backend
       const response = await authAPI.getSessions('7days');
+
       if (response?.success && response?.data?.sessions) {
         // Transform sessions data to top chats format
         // Sort by message count (most messages first) and take top 4
@@ -303,6 +310,7 @@ const DashboardOverview = () => {
             const messages = session.messages || [];
             const lastMsg = messages[messages.length - 1];
             const firstMsg = messages[0];
+
             return {
               id: session.session_id || `session-${index}`,
               visitorId: session.session_id,
@@ -314,11 +322,14 @@ const DashboardOverview = () => {
               messages: messages, // Store full messages for modal
             };
           });
+
         setTopChats(sessions);
       }
     } catch (err) {
-      console.warn('Failed to fetch top chats:', err);
+
       setTopChats([]);
+    } finally {
+      setTopChatsLoading(false);
     }
   };
 
@@ -639,7 +650,28 @@ const DashboardOverview = () => {
             </h2>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 px-6 pb-6 flex-1">
-            {topChats.length > 0 ? (
+            {topChatsLoading ? (
+              // Skeleton loading cards
+              Array.from({ length: 4 }).map((_, index) => (
+                <div
+                  key={`skeleton-${index}`}
+                  className="glass-card p-5 border border-zinc-200 rounded-xl flex flex-col animate-pulse"
+                >
+                  <div className="flex-1 mb-4 space-y-2">
+                    <div className="h-4 bg-zinc-200 rounded w-full" />
+                    <div className="h-4 bg-zinc-200 rounded w-5/6" />
+                    <div className="h-4 bg-zinc-200 rounded w-4/6" />
+                  </div>
+                  <div className="flex items-center justify-between text-xs pt-3 border-t border-zinc-100">
+                    <div className="h-3 bg-zinc-200 rounded w-20" />
+                    <div className="h-3 bg-zinc-200 rounded w-1" />
+                    <div className="h-3 bg-zinc-200 rounded w-12" />
+                    <div className="h-3 bg-zinc-200 rounded w-1" />
+                    <div className="h-3 bg-zinc-200 rounded w-16" />
+                  </div>
+                </div>
+              ))
+            ) : topChats.length > 0 ? (
               topChats.map((chat) => {
                 const formatDuration = (seconds) => {
                   const mins = Math.floor(seconds / 60);
@@ -891,21 +923,37 @@ const DashboardOverview = () => {
             </div>
 
             {/* Chat Messages */}
-            <div className="p-6 overflow-y-auto max-h-[calc(90vh-180px)] space-y-4">
-              {getChatConversation(selectedChat.id).map((message) => {
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-180px)]">
+              {getChatConversation(selectedChat.id).map((message, index, allMessages) => {
                 const isUser = message.role === 'user';
+                const prevMessage = index > 0 ? allMessages[index - 1] : null;
+                const nextMessage = index < allMessages.length - 1 ? allMessages[index + 1] : null;
+
+                // Check if this message is part of a group (same sender as prev/next)
+                const isFirstInGroup = !prevMessage || prevMessage.role !== message.role;
+                const isLastInGroup = !nextMessage || nextMessage.role !== message.role;
+
+                // Determine spacing: larger gap between different senders, smaller gap within same sender
+                const marginTop = index === 0 ? '' : isFirstInGroup ? 'mt-4' : 'mt-1';
+
                 return (
                   <div
                     key={message.id}
-                    className={`flex gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}
+                    className={`flex gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'} ${marginTop}`}
                   >
-                    <div className={`flex h-8 w-8 items-center justify-center rounded-full flex-shrink-0 ${
-                      isUser 
-                        ? 'bg-emerald-500 text-white' 
-                        : 'bg-zinc-100 text-zinc-600'
-                    }`}>
-                      {isUser ? <FaUser size={12} /> : <FaRobot size={12} />}
-                    </div>
+                    {/* Avatar - only show for first message in group */}
+                    {isFirstInGroup ? (
+                      <div className={`flex h-8 w-8 items-center justify-center rounded-full flex-shrink-0 ${
+                        isUser
+                          ? 'bg-emerald-500 text-white'
+                          : 'bg-zinc-100 text-zinc-600'
+                      }`}>
+                        {isUser ? <FaUser size={12} /> : <FaRobot size={12} />}
+                      </div>
+                    ) : (
+                      <div className="w-8 flex-shrink-0" />
+                    )}
+
                     <div className={`flex-1 ${isUser ? 'text-right' : 'text-left'}`}>
                       <div className={`inline-block max-w-[80%] rounded-2xl px-4 py-2 ${
                         isUser
@@ -913,21 +961,25 @@ const DashboardOverview = () => {
                           : 'bg-zinc-100 text-zinc-900'
                       }`}>
                         <div className={`text-sm whitespace-pre-wrap prose prose-sm max-w-none ${
-                          isUser 
-                            ? 'prose-invert [&_strong]:text-white [&_em]:text-emerald-100' 
+                          isUser
+                            ? 'prose-invert [&_strong]:text-white [&_em]:text-emerald-100'
                             : '[&_strong]:text-zinc-700 [&_strong]:font-semibold [&_em]:text-zinc-600'
                         } [&_p]:m-0 [&_ul]:m-0 [&_ol]:m-0 [&_li]:m-0`}>
                           <ReactMarkdown>{message.content}</ReactMarkdown>
                         </div>
                       </div>
-                      <p className={`text-xs text-zinc-400 mt-1 ${
-                        isUser ? 'text-right' : 'text-left'
-                      }`}>
-                        {new Date(message.timestamp).toLocaleTimeString([], { 
-                          hour: '2-digit', 
-                          minute: '2-digit' 
-                        })}
-                      </p>
+
+                      {/* Timestamp - only show for last message in group */}
+                      {isLastInGroup && (
+                        <p className={`text-xs text-zinc-400 mt-1 ${
+                          isUser ? 'text-right' : 'text-left'
+                        }`}>
+                          {new Date(message.timestamp).toLocaleTimeString([], {
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </p>
+                      )}
                     </div>
                   </div>
                 );

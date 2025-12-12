@@ -65,13 +65,11 @@ const SendEmailHistory = () => {
 
       const response = await authAPI.getEmailHistory(params);
       
-      console.log('Email history response:', response);
-      
+
       if (response?.success) {
         let emailList = response.data?.emails || [];
         
-        console.log('Email list from API:', emailList);
-        
+
         // Apply search filter if query exists
         if (searchQuery) {
           const query = searchQuery.toLowerCase();

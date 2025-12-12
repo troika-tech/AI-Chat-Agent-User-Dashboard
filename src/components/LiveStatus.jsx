@@ -20,7 +20,7 @@ const LiveStatus = () => {
         const statsResponse = await wsAPI.getStats();
         setSystemStats(statsResponse.data);
       } catch (err) {
-        console.warn('System stats not available:', err);
+
       }
 
       // Get all campaigns
@@ -64,7 +64,7 @@ const LiveStatus = () => {
               };
             }
           } catch (err) {
-            console.warn(`Failed to fetch debug info for campaign ${campaign._id}:`, err);
+
           }
           
           // Fallback to basic campaign data

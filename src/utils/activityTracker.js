@@ -61,7 +61,7 @@ class ActivityTracker {
    */
   start() {
     if (this.isTracking) {
-      console.log('⚠️ ActivityTracker: Already tracking, stopping first...');
+
       this.stop();
     }
     
@@ -93,7 +93,7 @@ class ActivityTracker {
     // Start the timer
     this.resetTimer();
     
-    console.log(`✅ ActivityTracker: Started tracking (${this.inactivityTimeout / 1000}s inactivity timeout)`);
+
   }
 
   /**
@@ -129,7 +129,7 @@ class ActivityTracker {
     // Remove custom activity event listener
     window.removeEventListener('userActivity', this.handleActivity);
     
-    console.log('🛑 ActivityTracker: Stopped tracking');
+
   }
 
   /**

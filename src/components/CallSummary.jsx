@@ -70,7 +70,7 @@ const CallSummary = () => {
           }
         }
       } catch (err) {
-        console.log('Could not fetch contacts:', err);
+
       }
 
       // Filter calls that have transcripts and are within last 21 days

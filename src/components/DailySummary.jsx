@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FaSpinner, FaCalendarAlt, FaComments, FaUsers, FaTags, FaChevronLeft, FaChevronRight, FaRobot } from 'react-icons/fa';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { authAPI } from '../services/api';
 
 const DailySummary = () => {
@@ -175,8 +176,10 @@ const DailySummary = () => {
               )}
 
               {/* Summary Text */}
-              <div className="prose prose-sm max-w-none text-zinc-700">
-                <ReactMarkdown>{summary.summary || 'No summary available.'}</ReactMarkdown>
+              <div className="prose prose-sm max-w-none">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {summary.summary || 'No summary available.'}
+                </ReactMarkdown>
               </div>
             </div>
           </div>

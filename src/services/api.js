@@ -52,10 +52,7 @@ api.interceptors.response.use(
                                    errorMessage.includes('another device') ||
                                    errorMessage.includes('another browser');
       
-      console.log('🚪 401 Unauthorized - Session invalidated:', isSessionInvalidated);
-      console.log('📋 Error message:', errorMessage);
-      console.log('🔄 Clearing session and redirecting to login...');
-      
+
       // Clear session and stored auth data
       clearSession();
       localStorage.removeItem('refreshToken');
@@ -98,7 +95,7 @@ export const authAPI = {
       return response.data;
     } catch (error) {
       // Even if logout fails on server, clear local storage
-      console.warn('Logout API call failed, clearing local storage anyway');
+
       return { success: true };
     }
   },
@@ -335,6 +332,24 @@ export const authAPI = {
     const response = await api.get('/api/user/messages', {
       params: { page, limit, email, phone, session_id, is_guest, dateRange, startDate, endDate, search }
     });
+    return response.data;
+  },
+
+  // Get full chat history for a single identifier - GET /api/user/chat-history
+  // Note: Unlike /api/user/messages?phone=..., this endpoint returns ALL messages for
+  // sessions associated with the phone/email (including messages where phone/email fields are missing).
+  getChatHistory: async (params = {}) => {
+    const { session_id, phone, email } = params;
+
+    if (DEMO_MODE) {
+      await mockDelay(200);
+      return { success: true, data: { messages: [], stats: { totalMessages: 0 } } };
+    }
+
+    const response = await api.get('/api/user/chat-history', {
+      params: { session_id, phone, email }
+    });
+
     return response.data;
   },
 

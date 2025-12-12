@@ -182,7 +182,7 @@ const Campaigns = () => {
       } else if (campaignsData && Array.isArray(campaignsData.campaigns)) {
         setCampaigns(campaignsData.campaigns);
       } else {
-        console.warn('Campaigns response is not an array:', campaignsData);
+
         setCampaigns([]);
       }
     } catch (err) {
@@ -234,11 +234,9 @@ const Campaigns = () => {
         // Step 2: Add contacts to campaign
         try {
           const contactsResponse = await campaignAPI.addContacts(response.data._id, phoneNumbers);
-          console.log('Add contacts response:', contactsResponse);
 
           if (contactsResponse.success && contactsResponse.data) {
             const { added, duplicates, errors } = contactsResponse.data;
-            console.log(`Contacts added: ${added}, duplicates: ${duplicates}, errors: ${errors}`);
 
             if (added === 0 && errors > 0) {
               alert(`Campaign created but failed to add contacts. ${errors} errors occurred.`);
@@ -278,7 +276,7 @@ const Campaigns = () => {
           fetchCampaigns();
 
           // Auto-start the campaign
-          console.log('Auto-starting campaign:', response.data._id);
+
           try {
             await handleStartCampaign(response.data._id);
             alert('Campaign started! Calls are being initiated...');

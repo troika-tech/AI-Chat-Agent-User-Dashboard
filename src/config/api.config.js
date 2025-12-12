@@ -5,7 +5,7 @@
 // Options: 'NEW', 'OLD', 'LOCALHOST'
 // Using NEW so the dashboard targets the local chatbot backend at :5000.
 // const BACKEND_MODE = 'NEW'; // Set to 'OLD' for hosted API, 'LOCALHOST' for local testing
-const BACKEND_MODE = 'NEW'; // Set to 'OLD' for hosted API, 'LOCALHOST' for local testing
+const BACKEND_MODE = 'LOCALHOST'; // Set to 'OLD' for hosted API, 'LOCALHOST' for local testing
 
 // API URLs
 const BACKEND_URLS = {
@@ -37,16 +37,6 @@ export const CURRENT_BACKEND_MODE = BACKEND_MODE;
 
 // Demo mode (kept for compatibility, always false)
 export const DEMO_MODE = false;
-
-// Log current configuration (only in development)
-if (process.env.NODE_ENV === 'development') {
-  console.log('='.repeat(60));
-  console.log('🔧 API Configuration');
-  console.log('='.repeat(60));
-  console.log(`Backend Mode: ${BACKEND_MODE}`);
-  console.log(`API Base URL: ${API_BASE_URL}`);
-  console.log('='.repeat(60));
-}
 
 export default {
   API_BASE_URL,
