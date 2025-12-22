@@ -4,6 +4,7 @@
 // To switch backends, simply change the BACKEND_MODE value below
 // Options: 'NEW', 'OLD', 'LOCALHOST'
 // Using NEW for production
+// const BACKEND_MODE = 'LOCALHOST'; // Set to 'OLD' for hosted API, 'NEW' for production, 'LOCALHOST' for local testing
 const BACKEND_MODE = 'NEW'; // Set to 'OLD' for hosted API, 'NEW' for production, 'LOCALHOST' for local testing
 
 // API URLs

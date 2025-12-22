@@ -22,6 +22,7 @@ import {
   FaCheck,
 } from 'react-icons/fa';
 import { authAPI } from '../services/api';
+import TranslationComponent from './TranslationComponent';
 
 const FollowUpLeads = () => {
   const [leads, setLeads] = useState([]);
@@ -41,6 +42,7 @@ const FollowUpLeads = () => {
   const [selectedSession, setSelectedSession] = useState(null);
   const [sessionMessages, setSessionMessages] = useState([]);
   const [sessionLoading, setSessionLoading] = useState(false);
+  const [translatedMessages, setTranslatedMessages] = useState(null);
 
   // Notes modal state
   const [notesModalOpen, setNotesModalOpen] = useState(false);
@@ -170,6 +172,7 @@ const FollowUpLeads = () => {
       setSessionLoading(true);
       setSelectedSession(sessionId);
       setSessionModalOpen(true);
+      setTranslatedMessages(null); // Reset translation when opening new chat
       
       const response = await authAPI.getMessages({ session_id: sessionId, limit: 100 });
       const messages = response.data?.messages || [];
@@ -915,12 +918,33 @@ const FollowUpLeads = () => {
             <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-200">
               <h3 className="font-semibold text-zinc-900">Chat History</h3>
               <button
-                onClick={() => setSessionModalOpen(false)}
+                onClick={() => {
+                  setSessionModalOpen(false);
+                  setTranslatedMessages(null);
+                }}
                 className="p-2 rounded-lg hover:bg-zinc-100 text-zinc-500"
               >
                 <FaTimes />
               </button>
             </div>
+            
+            {/* Translation Component */}
+            {sessionMessages.length > 0 && (
+              <div className="px-6 pt-4 pb-0">
+                <TranslationComponent
+                  content={sessionMessages.map(msg => ({
+                    speaker: msg.sender === 'user' ? 'user' : 'agent',
+                    text: msg.content,
+                    content: msg.content,
+                    timestamp: msg.timestamp,
+                  }))}
+                  onTranslatedContentChange={(translated) => {
+                    setTranslatedMessages(translated);
+                  }}
+                />
+              </div>
+            )}
+            
             <div className="flex-1 overflow-y-auto p-6 space-y-4">
               {sessionLoading ? (
                 <div className="flex justify-center py-12">
@@ -929,31 +953,40 @@ const FollowUpLeads = () => {
               ) : sessionMessages.length === 0 ? (
                 <p className="text-center text-zinc-500 py-12">No messages found</p>
               ) : (
-                sessionMessages.map((msg, idx) => (
-                  <div
-                    key={idx}
-                    className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
-                  >
+                (translatedMessages || sessionMessages).map((msg, idx) => {
+                  // Handle both original message format and translated transcript format
+                  const isUser = msg.sender === 'user' || msg.speaker === 'user';
+                  const messageContent = msg.content || msg.text || '';
+                  const messageTimestamp = msg.timestamp;
+                  
+                  return (
                     <div
-                      className={`max-w-[80%] px-4 py-3 rounded-xl ${
-                        msg.sender === 'user'
-                          ? 'bg-purple-500 text-white'
-                          : 'bg-zinc-100 text-zinc-800'
-                      }`}
+                      key={idx}
+                      className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}
                     >
-                      {msg.sender === 'user' ? (
-                        <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
-                      ) : (
-                        <div className="text-sm prose prose-sm max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-a:text-purple-600 [&_strong]:text-zinc-700 [&_strong]:font-semibold">
-                          <ReactMarkdown>{msg.content}</ReactMarkdown>
-                        </div>
-                      )}
-                      <p className={`text-xs mt-1 ${msg.sender === 'user' ? 'text-purple-200' : 'text-zinc-400'}`}>
-                        {new Date(msg.timestamp).toLocaleTimeString()}
-                      </p>
+                      <div
+                        className={`max-w-[80%] px-4 py-3 rounded-xl ${
+                          isUser
+                            ? 'bg-purple-500 text-white'
+                            : 'bg-zinc-100 text-zinc-800'
+                        }`}
+                      >
+                        {isUser ? (
+                          <p className="text-sm whitespace-pre-wrap">{messageContent}</p>
+                        ) : (
+                          <div className="text-sm prose prose-sm max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-a:text-purple-600 [&_strong]:text-zinc-700 [&_strong]:font-semibold">
+                            <ReactMarkdown>{messageContent}</ReactMarkdown>
+                          </div>
+                        )}
+                        {messageTimestamp && (
+                          <p className={`text-xs mt-1 ${isUser ? 'text-purple-200' : 'text-zinc-400'}`}>
+                            {new Date(messageTimestamp).toLocaleTimeString()}
+                          </p>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>

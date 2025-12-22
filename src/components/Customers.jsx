@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { FaUsers, FaPhone, FaSpinner, FaSearch, FaCalendar, FaEye, FaTimes, FaRobot, FaUser, FaComment, FaClock, FaFileDownload } from 'react-icons/fa';
 import ReactMarkdown from 'react-markdown';
 import { authAPI } from '../services/api';
+import TranslationComponent from './TranslationComponent';
 
 const Customers = () => {
   const [loading, setLoading] = useState(true);
@@ -15,6 +16,7 @@ const Customers = () => {
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [chatMessages, setChatMessages] = useState([]);
   const [chatLoading, setChatLoading] = useState(false);
+  const [translatedMessages, setTranslatedMessages] = useState(null); // State for translated messages
   
   // Export modal state
   const [showExportModal, setShowExportModal] = useState(false);
@@ -253,6 +255,7 @@ const Customers = () => {
     setSelectedCustomer(customer);
     setShowChatModal(true);
     setChatLoading(true);
+    setTranslatedMessages(null); // Reset translation on new chat
 
     try {
       const response = await authAPI.getChatHistory({
@@ -296,6 +299,7 @@ const Customers = () => {
     setShowChatModal(false);
     setSelectedCustomer(null);
     setChatMessages([]);
+    setTranslatedMessages(null); // Reset translation on modal close
   };
 
   if (loading) {
@@ -482,6 +486,23 @@ const Customers = () => {
               </button>
             </div>
 
+            {/* Translation Component */}
+            {chatMessages.length > 0 && (
+              <div className="px-6 pt-4 pb-0">
+                <TranslationComponent
+                  content={chatMessages.map(msg => ({
+                    speaker: msg.sender === 'user' ? 'user' : 'agent',
+                    text: msg.content,
+                    content: msg.content,
+                    timestamp: msg.timestamp,
+                  }))}
+                  onTranslatedContentChange={(translated) => {
+                    setTranslatedMessages(translated);
+                  }}
+                />
+              </div>
+            )}
+
             {/* Chat Messages */}
             <div className="flex-1 overflow-y-auto p-4 bg-zinc-50">
               {chatLoading ? (
@@ -494,32 +515,38 @@ const Customers = () => {
                   <p>No messages found</p>
                 </div>
               ) : (
-                chatMessages.map((msg, idx) => {
+                (translatedMessages || chatMessages).map((msg, idx) => {
+                  // Handle both original and translated message formats
+                  const messageContent = msg.content || msg.text || '';
+                  const messageSender = msg.sender || (msg.speaker === 'user' ? 'user' : 'agent');
+                  const messageTimestamp = msg.timestamp;
+                  const messageId = msg._id || msg.id || idx;
+                  
                   return (
                     <div
-                      key={msg._id || msg.id || idx}
-                      className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'} mt-4`}
+                      key={messageId}
+                      className={`flex ${messageSender === 'user' ? 'justify-end' : 'justify-start'} mt-4`}
                     >
-                      <div className={`max-w-[80%] ${msg.sender === 'user' ? 'order-2' : 'order-1'}`}>
+                      <div className={`max-w-[80%] ${messageSender === 'user' ? 'order-2' : 'order-1'}`}>
                         <div className="flex items-center gap-2 mb-1.5">
                           <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
-                            msg.sender === 'user' ? 'bg-blue-100 text-blue-600' : 'bg-emerald-100 text-emerald-600'
+                            messageSender === 'user' ? 'bg-blue-100 text-blue-600' : 'bg-emerald-100 text-emerald-600'
                           }`}>
-                            {msg.sender === 'user' ? <FaUser size={12} /> : <FaRobot size={12} />}
+                            {messageSender === 'user' ? <FaUser size={12} /> : <FaRobot size={12} />}
                           </div>
                           <span className="text-xs text-zinc-500">
-                            {msg.sender === 'user' ? 'User' : 'Bot'} • {formatDate(msg.timestamp)}
+                            {messageSender === 'user' ? 'User' : 'Bot'} • {formatDate(messageTimestamp)}
                           </span>
                         </div>
                         <div className={`p-3 rounded-xl ${
-                          msg.sender === 'user'
+                          messageSender === 'user'
                             ? 'bg-blue-600 text-white rounded-tr-sm rounded-br-lg rounded-bl-lg'
                             : 'bg-white border border-zinc-200 text-zinc-800 rounded-tl-sm rounded-bl-lg rounded-br-lg'
                         }`}>
                           <div className={`text-sm prose prose-sm max-w-none ${
-                            msg.sender === 'user' ? 'prose-invert' : '[&_strong]:text-zinc-700 [&_strong]:font-semibold'
+                            messageSender === 'user' ? 'prose-invert' : '[&_strong]:text-zinc-700 [&_strong]:font-semibold'
                           }`}>
-                            <ReactMarkdown>{msg.content || ''}</ReactMarkdown>
+                            <ReactMarkdown>{messageContent}</ReactMarkdown>
                           </div>
                         </div>
                       </div>

@@ -3,11 +3,13 @@ import { FaSpinner, FaCalendarAlt, FaComments, FaUsers, FaTags, FaChevronLeft, F
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { authAPI } from '../services/api';
+import TranslationComponent from './TranslationComponent';
 
 const DailySummary = () => {
   const [loading, setLoading] = useState(true);
   const [summaries, setSummaries] = useState([]);
   const [error, setError] = useState(null);
+  const [translatedSummaries, setTranslatedSummaries] = useState({}); // Object to store translated summaries by ID
   const [pagination, setPagination] = useState({
     page: 1,
     limit: 10,
@@ -175,10 +177,43 @@ const DailySummary = () => {
                 </div>
               )}
 
+              {/* Translation Component */}
+              {summary.summary && (
+                <div className="mb-4">
+                  <TranslationComponent
+                    summary={summary.summary}
+                    onTranslationComplete={(result) => {
+                      if (result.translatedSummary) {
+                        setTranslatedSummaries(prev => ({
+                          ...prev,
+                          [summary._id]: result.translatedSummary
+                        }));
+                      }
+                    }}
+                    onTranslatedContentChange={(translated) => {
+                      if (translated === null) {
+                        // Reset translation for this summary
+                        setTranslatedSummaries(prev => {
+                          const updated = { ...prev };
+                          delete updated[summary._id];
+                          return updated;
+                        });
+                      } else if (typeof translated === 'string') {
+                        // Handle string translation (from summary prop)
+                        setTranslatedSummaries(prev => ({
+                          ...prev,
+                          [summary._id]: translated
+                        }));
+                      }
+                    }}
+                  />
+                </div>
+              )}
+
               {/* Summary Text */}
               <div className="prose prose-sm max-w-none">
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {summary.summary || 'No summary available.'}
+                  {translatedSummaries[summary._id] || summary.summary || 'No summary available.'}
                 </ReactMarkdown>
               </div>
             </div>

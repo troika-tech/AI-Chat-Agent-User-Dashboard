@@ -1426,5 +1426,36 @@ export const handoffAPI = {
   },
 };
 
+// Translation APIs
+export const translateAPI = {
+  // Get supported languages
+  getLanguages: async () => {
+    const response = await api.get('/api/v1/translate/languages');
+    return response.data;
+  },
+
+  // Translate transcript
+  translateTranscript: async (transcript, targetLanguage) => {
+    const response = await api.post('/api/v1/translate/transcript', {
+      transcript,
+      targetLanguage,
+    });
+    return response.data;
+  },
+
+  // Translate text array
+  translateTexts: async (texts, targetLanguage, sourceLanguage = null) => {
+    const body = {
+      texts,
+      targetLanguage,
+    };
+    if (sourceLanguage) {
+      body.sourceLanguage = sourceLanguage;
+    }
+    const response = await api.post('/api/v1/translate/text', body);
+    return response.data;
+  },
+};
+
 export default api;
 

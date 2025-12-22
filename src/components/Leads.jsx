@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { FaSearch, FaPhone, FaEnvelope, FaUser, FaSpinner, FaComments, FaTimesCircle, FaSortUp, FaSortDown, FaFire, FaCalendar, FaFileDownload, FaChevronDown, FaCheck } from 'react-icons/fa';
 import { authAPI } from '../services/api';
 import { DEMO_MODE } from '../config/api.config';
+import TranslationComponent from './TranslationComponent';
 
 const Leads = () => {
   const [loading, setLoading] = useState(true);
@@ -18,6 +19,7 @@ const Leads = () => {
   const [dateSortOrder, setDateSortOrder] = useState('desc');
   const [showChatModal, setShowChatModal] = useState(false);
   const [selectedLead, setSelectedLead] = useState(null);
+  const [translatedMessages, setTranslatedMessages] = useState(null);
   const [connectedStatuses, setConnectedStatuses] = useState({});
   const [exportingAll, setExportingAll] = useState(false);
   const [exportingKeyword, setExportingKeyword] = useState(null);
@@ -845,6 +847,7 @@ const Leads = () => {
                 onClick={() => {
                   setShowChatModal(false);
                   setSelectedLead(null);
+                  setTranslatedMessages(null);
                 }}
                 className="p-2 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors"
               >
@@ -870,27 +873,50 @@ const Leads = () => {
               </div>
             </div>
 
+            {/* Translation Component */}
+            {selectedLead.messageSnippets && selectedLead.messageSnippets.length > 0 && (
+              <TranslationComponent
+                content={selectedLead.messageSnippets.map(msg => ({
+                  speaker: 'user',
+                  text: msg.content,
+                  content: msg.content,
+                  timestamp: msg.timestamp,
+                }))}
+                onTranslatedContentChange={(translated) => {
+                  setTranslatedMessages(translated);
+                }}
+              />
+            )}
+
             {/* Message Snippets */}
             <div className="bg-zinc-50/50 p-4 rounded-lg border border-zinc-200">
               <h3 className="text-sm font-semibold text-zinc-900 mb-3">Messages with Keywords</h3>
               <div className="space-y-3 max-h-96 overflow-y-auto">
                 {(selectedLead.messageSnippets || []).length > 0 ? (
-                  selectedLead.messageSnippets.map((msg, idx) => (
-                    <div key={idx} className="flex justify-end">
-                      <div className="max-w-[85%] p-3 rounded-lg bg-emerald-500 text-white rounded-tr-none">
-                        <p className="text-sm">{msg.content}</p>
-                        <p className="text-xs text-emerald-100 mt-1">
-                          {new Date(msg.timestamp).toLocaleTimeString('en-US', {
-                            hour: 'numeric',
-                            minute: '2-digit',
-                            hour12: true,
-                            day: 'numeric',
-                            month: 'short'
-                          })}
-                        </p>
+                  (translatedMessages || selectedLead.messageSnippets).map((msg, idx) => {
+                    // Handle both original message format and translated transcript format
+                    const messageContent = msg.content || msg.text || '';
+                    const messageTimestamp = msg.timestamp;
+                    
+                    return (
+                      <div key={idx} className="flex justify-end">
+                        <div className="max-w-[85%] p-3 rounded-lg bg-emerald-500 text-white rounded-tr-none">
+                          <p className="text-sm">{messageContent}</p>
+                          {messageTimestamp && (
+                            <p className="text-xs text-emerald-100 mt-1">
+                              {new Date(messageTimestamp).toLocaleTimeString('en-US', {
+                                hour: 'numeric',
+                                minute: '2-digit',
+                                hour12: true,
+                                day: 'numeric',
+                                month: 'short'
+                              })}
+                            </p>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))
+                    );
+                  })
                 ) : (
                   <div className="text-center text-zinc-500 text-sm py-4">
                     No message snippets available

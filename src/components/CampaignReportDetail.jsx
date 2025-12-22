@@ -18,6 +18,7 @@ import {
   FaSearch
 } from 'react-icons/fa';
 import { campaignAPI, callAPI } from '../services/api';
+import TranslationComponent from './TranslationComponent';
 
 const CampaignReportDetail = () => {
   const { campaignId } = useParams();
@@ -42,6 +43,7 @@ const CampaignReportDetail = () => {
   const phoneFilterRef = useRef(null);
   const [transcriptModalOpen, setTranscriptModalOpen] = useState(false);
   const [transcriptCall, setTranscriptCall] = useState(null);
+  const [translatedTranscript, setTranslatedTranscript] = useState(null);
 
   useEffect(() => {
     fetchCampaignDetails();
@@ -728,6 +730,7 @@ const CampaignReportDetail = () => {
                             <button
                               onClick={() => {
                                 setTranscriptCall(call);
+                                setTranslatedTranscript(null); // Reset translation when opening new transcript
                                 setTranscriptModalOpen(true);
                               }}
                               className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-full text-[11px] font-medium transition-colors"
@@ -827,8 +830,18 @@ const CampaignReportDetail = () => {
               </button>
             </div>
             <div className="p-6 space-y-4 overflow-y-auto max-h-[70vh]">
+              {/* Translation Component */}
+              {transcriptCall.transcript && transcriptCall.transcript.length > 0 && (
+                <TranslationComponent
+                  content={transcriptCall.transcript}
+                  onTranslatedContentChange={(translated) => {
+                    setTranslatedTranscript(translated);
+                  }}
+                />
+              )}
+              
               {transcriptCall.transcript && transcriptCall.transcript.length > 0 ? (
-                transcriptCall.transcript.map((entry, idx) => (
+                (translatedTranscript || transcriptCall.transcript).map((entry, idx) => (
                   <div
                     key={idx}
                     className="border border-zinc-200 rounded-lg p-4 bg-zinc-50"

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FaSpinner, FaChartBar, FaEye, FaFileDownload, FaTimesCircle, FaPhone, FaClock, FaBullseye, FaSortUp, FaSortDown } from 'react-icons/fa';
 import { callAPI, campaignAPI } from '../services/api';
+import TranslationComponent from './TranslationComponent';
 
 const CallSummary = () => {
   const [loading, setLoading] = useState(true);
@@ -8,6 +9,7 @@ const CallSummary = () => {
   const [error, setError] = useState(null);
   const [showTranscriptModal, setShowTranscriptModal] = useState(false);
   const [selectedCall, setSelectedCall] = useState(null);
+  const [translatedTranscript, setTranslatedTranscript] = useState(null);
   const [summary, setSummary] = useState({
     totalCalls: 0,
     avgDuration: 0,
@@ -335,6 +337,7 @@ const CallSummary = () => {
 
   const handleViewTranscript = (call) => {
     setSelectedCall(call);
+    setTranslatedTranscript(null); // Reset translation when opening new transcript
     setShowTranscriptModal(true);
   };
 
@@ -632,12 +635,22 @@ const CallSummary = () => {
               </div>
             </div>
 
+            {/* Translation Component */}
+            {selectedCall.transcript && selectedCall.transcript.length > 0 && (
+              <TranslationComponent
+                content={selectedCall.transcript}
+                onTranslatedContentChange={(translated) => {
+                  setTranslatedTranscript(translated);
+                }}
+              />
+            )}
+
             {/* Transcript */}
             {selectedCall.transcript && selectedCall.transcript.length > 0 && (
               <div className="bg-zinc-50/50 p-4 rounded-lg border border-zinc-200">
                 <h3 className="text-sm font-semibold text-zinc-900 mb-3">Transcript</h3>
                 <div className="space-y-3 max-h-96 overflow-y-auto">
-                  {selectedCall.transcript.map((entry, idx) => {
+                  {(translatedTranscript || selectedCall.transcript).map((entry, idx) => {
                     const isUser = entry.speaker === 'user' || entry.speaker === 'customer';
                     const text = entry.text || entry.content || '';
                     

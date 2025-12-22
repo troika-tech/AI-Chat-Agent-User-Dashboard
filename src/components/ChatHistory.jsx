@@ -4,6 +4,7 @@ import { FaSearch, FaFilter, FaChevronDown, FaEye, FaComments, FaUser, FaRobot, 
 import ReactMarkdown from 'react-markdown';
 import { DEMO_MODE } from '../config/api.config';
 import { authAPI } from '../services/api';
+import TranslationComponent from './TranslationComponent';
 
 const ChatHistory = () => {
   const [loading, setLoading] = useState(true);
@@ -40,6 +41,7 @@ const ChatHistory = () => {
   const [sessionMessages, setSessionMessages] = useState([]);
   const [loadingSession, setLoadingSession] = useState(false);
   const [groupedConversations, setGroupedConversations] = useState([]);
+  const [translatedMessages, setTranslatedMessages] = useState(null);
 
   // Fetch all contacts on mount (for filter dropdowns)
   useEffect(() => {
@@ -323,6 +325,7 @@ const ChatHistory = () => {
       setSelectedMessage(message);
       setShowDetailsModal(true);
       setSessionMessages([]);
+      setTranslatedMessages(null); // Reset translation when opening new session
 
       if (DEMO_MODE) {
         await new Promise(resolve => setTimeout(resolve, 300));
@@ -1012,6 +1015,23 @@ const ChatHistory = () => {
               </div>
             </div>
 
+            {/* Translation Component */}
+            {sessionMessages.length > 0 && (
+              <div className="px-6 pt-4 pb-0">
+                <TranslationComponent
+                  content={sessionMessages.map(msg => ({
+                    speaker: msg.sender === 'agent' ? 'agent' : 'user',
+                    text: msg.content,
+                    content: msg.content,
+                    timestamp: msg.timestamp,
+                  }))}
+                  onTranslatedContentChange={(translated) => {
+                    setTranslatedMessages(translated);
+                  }}
+                />
+              </div>
+            )}
+
             {/* Chat Messages */}
             <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-zinc-50/50">
               {loadingSession ? (
@@ -1025,8 +1045,12 @@ const ChatHistory = () => {
                   <p>No messages found in this session</p>
                 </div>
               ) : (
-                sessionMessages.map((msg, index) => {
-                  const isAgent = msg.sender === 'agent';
+                (translatedMessages || sessionMessages).map((msg, index) => {
+                  // Handle both original message format and translated transcript format
+                  const isAgent = msg.sender === 'agent' || msg.speaker === 'agent';
+                  const messageContent = msg.content || msg.text || '';
+                  const messageTimestamp = msg.timestamp;
+                  
                   return (
                     <div key={msg._id || index} className={`flex ${isAgent ? 'justify-start' : 'justify-end'}`}>
                       <div className={`max-w-[80%] flex gap-3 ${isAgent ? 'flex-row' : 'flex-row-reverse'}`}>
@@ -1054,16 +1078,18 @@ const ChatHistory = () => {
                                 code: ({children}) => <code className={`px-1 py-0.5 rounded text-xs ${isAgent ? 'bg-zinc-100' : 'bg-emerald-600'}`}>{children}</code>,
                               }}
                             >
-                              {msg.content}
+                              {messageContent}
                             </ReactMarkdown>
                           </div>
-                          <p className={`text-xs mt-2 ${isAgent ? 'text-zinc-400' : 'text-emerald-100'}`}>
-                            {new Date(msg.timestamp).toLocaleTimeString('en-US', {
-                              hour: 'numeric',
-                              minute: '2-digit',
-                              hour12: true,
-                            })}
-                          </p>
+                          {messageTimestamp && (
+                            <p className={`text-xs mt-2 ${isAgent ? 'text-zinc-400' : 'text-emerald-100'}`}>
+                              {new Date(messageTimestamp).toLocaleTimeString('en-US', {
+                                hour: 'numeric',
+                                minute: '2-digit',
+                                hour12: true,
+                              })}
+                            </p>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1082,6 +1108,7 @@ const ChatHistory = () => {
                   setShowDetailsModal(false);
                   setSelectedMessage(null);
                   setSessionMessages([]);
+                  setTranslatedMessages(null);
                 }}
                 className="px-6 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-medium transition-colors"
               >

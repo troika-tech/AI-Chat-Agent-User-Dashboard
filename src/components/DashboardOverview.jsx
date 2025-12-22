@@ -15,6 +15,7 @@ import {
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { authAPI } from '../services/api';
 import { DEMO_MODE } from '../config/api.config';
+import TranslationComponent from './TranslationComponent';
 
 const DashboardOverview = () => {
   const [loading, setLoading] = useState(true);
@@ -25,6 +26,7 @@ const DashboardOverview = () => {
   const [topChatsLoading, setTopChatsLoading] = useState(true);
   const [selectedChat, setSelectedChat] = useState(null);
   const [showChatModal, setShowChatModal] = useState(false);
+  const [translatedMessages, setTranslatedMessages] = useState(null);
   const [chatsChartData, setChatsChartData] = useState([]);
   const [visitorsChartData, setVisitorsChartData] = useState([]);
 
@@ -538,6 +540,7 @@ const DashboardOverview = () => {
   const handleChatClick = (chat) => {
     setSelectedChat(chat);
     setShowChatModal(true);
+    setTranslatedMessages(null); // Reset translation when opening new chat
   };
 
   if (loading) {
@@ -914,6 +917,7 @@ const DashboardOverview = () => {
                   onClick={() => {
                     setShowChatModal(false);
                     setSelectedChat(null);
+                    setTranslatedMessages(null);
                   }}
                   className="p-2 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors"
                 >
@@ -922,17 +926,41 @@ const DashboardOverview = () => {
               </div>
             </div>
 
+            {/* Translation Component */}
+            {selectedChat && getChatConversation(selectedChat.id).length > 0 && (
+              <div className="px-6 pt-4 pb-0">
+                <TranslationComponent
+                  content={getChatConversation(selectedChat.id).map(msg => ({
+                    speaker: msg.role === 'user' ? 'user' : 'agent',
+                    text: msg.content,
+                    content: msg.content,
+                    timestamp: msg.timestamp,
+                  }))}
+                  onTranslatedContentChange={(translated) => {
+                    setTranslatedMessages(translated);
+                  }}
+                />
+              </div>
+            )}
+
             {/* Chat Messages */}
             <div className="p-6 overflow-y-auto max-h-[calc(90vh-180px)]">
-              {getChatConversation(selectedChat.id).map((message, index, allMessages) => {
-                const isUser = message.role === 'user';
+              {(translatedMessages || getChatConversation(selectedChat.id)).map((message, index, allMessages) => {
+                // Handle both original message format and translated transcript format
+                const isUser = message.role === 'user' || message.speaker === 'user';
+                const messageContent = message.content || message.text || '';
+                const messageTimestamp = message.timestamp;
+                
+                // For translated messages, we need to reconstruct the grouping
                 const prevMessage = index > 0 ? allMessages[index - 1] : null;
                 const nextMessage = index < allMessages.length - 1 ? allMessages[index + 1] : null;
-
+                
                 // Check if this message is part of a group (same sender as prev/next)
-                const isFirstInGroup = !prevMessage || prevMessage.role !== message.role;
-                const isLastInGroup = !nextMessage || nextMessage.role !== message.role;
-
+                const prevIsUser = prevMessage ? (prevMessage.role === 'user' || prevMessage.speaker === 'user') : null;
+                const nextIsUser = nextMessage ? (nextMessage.role === 'user' || nextMessage.speaker === 'user') : null;
+                const isFirstInGroup = !prevMessage || prevIsUser !== isUser;
+                const isLastInGroup = !nextMessage || nextIsUser !== isUser;
+                
                 // Determine spacing: larger gap between different senders, smaller gap within same sender
                 const marginTop = index === 0 ? '' : isFirstInGroup ? 'mt-4' : 'mt-1';
 
@@ -965,16 +993,16 @@ const DashboardOverview = () => {
                             ? 'prose-invert [&_strong]:text-white [&_em]:text-emerald-100'
                             : '[&_strong]:text-zinc-700 [&_strong]:font-semibold [&_em]:text-zinc-600'
                         } [&_p]:m-0 [&_ul]:m-0 [&_ol]:m-0 [&_li]:m-0`}>
-                          <ReactMarkdown>{message.content}</ReactMarkdown>
+                          <ReactMarkdown>{messageContent}</ReactMarkdown>
                         </div>
                       </div>
 
                       {/* Timestamp - only show for last message in group */}
-                      {isLastInGroup && (
+                      {isLastInGroup && messageTimestamp && (
                         <p className={`text-xs text-zinc-400 mt-1 ${
                           isUser ? 'text-right' : 'text-left'
                         }`}>
-                          {new Date(message.timestamp).toLocaleTimeString([], {
+                          {new Date(messageTimestamp).toLocaleTimeString([], {
                             hour: '2-digit',
                             minute: '2-digit'
                           })}
